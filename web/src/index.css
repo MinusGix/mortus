@@ -1,0 +1,71 @@
+:root {
+  font-family: 'Manrope', 'Avenir Next', 'Segoe UI', 'Helvetica Neue', sans-serif;
+  line-height: 1.6;
+  font-weight: 500;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --bg: radial-gradient(1200px 700px at 10% 10%, #2a2014, transparent 45%),
+    radial-gradient(800px 600px at 90% 0%, #1a3041, transparent 45%),
+    #0e0c12;
+  --panel: rgba(21, 18, 24, 0.8);
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-strong: rgba(255, 255, 255, 0.06);
+  --card: linear-gradient(165deg, rgba(255, 255, 240, 0.1), rgba(255, 255, 240, 0.03));
+  --stroke: rgba(255, 255, 255, 0.1);
+  --stroke-strong: rgba(255, 255, 255, 0.2);
+  --text-primary: #f8f6f0;
+  --text-muted: rgba(248, 246, 240, 0.7);
+  --accent: #d2944a;
+  --accent-strong: #edc073;
+  --accent-soft: #f3cf91;
+  --on-accent: #0e0c12;
+}
+
+.theme-modern {
+  --bg: radial-gradient(900px 700px at 70% 10%, #0c283f, transparent 45%),
+    linear-gradient(135deg, #0b0f16 0%, #101828 45%, #0b1321 100%);
+  --panel: rgba(14, 19, 32, 0.9);
+  --surface: rgba(255, 255, 255, 0.02);
+  --surface-strong: rgba(255, 255, 255, 0.07);
+  --card: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  --stroke: rgba(255, 255, 255, 0.08);
+  --stroke-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: #f5f7fb;
+  --text-muted: rgba(245, 247, 251, 0.75);
+  --accent: #76b7ff;
+  --accent-strong: #9fd1ff;
+  --accent-soft: #7bc4ff;
+  --on-accent: #041326;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0e0c12;
+  color: var(--text-primary);
+}
+
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+a {
+  color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
