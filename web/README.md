@@ -8,8 +8,15 @@ React + TypeScript + Vite front-end for the online MTG tabletop. This is the sta
 
 ## Setup
 ```bash
-npm install
+npm install # front-end deps
 npm run dev
+```
+
+Run the websocket server locally (separate terminal):
+```bash
+cd ../server
+npm install
+npm run start
 ```
 
 ## Scripts

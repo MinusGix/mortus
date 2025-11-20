@@ -1,5 +1,6 @@
 .env
 web/node_modules
 web/dist
+server/node_modules
 .DS_Store
 Thumbs.db

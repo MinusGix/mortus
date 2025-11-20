@@ -1,9 +1,11 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import './App.css'
-import { createMockServer } from './mockService'
-import { type BoardCard, type GameSnapshot } from './types'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { type BoardCard } from './types'
+import { createWsClient, type ClientState } from './wsClient'
 
-const server = createMockServer()
+const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
+const defaultRoom = import.meta.env.VITE_DEFAULT_ROOM || 'A1B2-CASCADE'
+const client = createWsClient(wsUrl)
 
 function CardList({ cards }: { cards: BoardCard[] }) {
   return (
@@ -21,38 +23,64 @@ function CardList({ cards }: { cards: BoardCard[] }) {
 
 function App() {
   const [theme, setTheme] = useState<'vintage' | 'modern'>('vintage')
-  const [roomCode, setRoomCode] = useState('A1B2-CASCADE')
+  const [roomCode, setRoomCode] = useState(defaultRoom)
   const [deckUrl, setDeckUrl] = useState('https://www.moxfield.com/decks/sample')
-  const [state, setState] = useState<GameSnapshot | null>(null)
+  const [clientState, setClientState] = useState<ClientState>(client.getState())
 
   useEffect(() => {
-    const unsubscribe = server.subscribe(setState)
+    const unsubscribe = client.subscribe(setClientState)
+    client.connect()
+    client.joinRoom(defaultRoom).catch(() => {
+      setClientState((prev) => ({ ...prev, lastError: 'Unable to join default room' }))
+    })
     return unsubscribe
   }, [])
 
+  useEffect(() => {
+    if (clientState.room) setRoomCode(clientState.room)
+  }, [clientState.room])
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-modern', theme === 'modern')
+  }, [theme])
+
+  const snapshot = clientState.snapshot
+
   const boardByPlayer = useMemo(() => {
-    if (!state) return {}
-    return state.players.reduce<Record<string, BoardCard[]>>((acc, player) => {
-      acc[player.name] = state.board.filter((card) => card.owner === player.name)
+    if (!snapshot) return {}
+    return snapshot.players.reduce<Record<string, BoardCard[]>>((acc, player) => {
+      acc[player.name] = snapshot.board.filter((card) => card.owner === player.name)
       return acc
     }, {})
-  }, [state])
-
-  if (!state) return null
+  }, [snapshot])
 
   const onJoin = (event: FormEvent) => {
     event.preventDefault()
-    server.joinRoom(roomCode)
+    client.joinRoom(roomCode)
   }
 
-  const onCreateRoom = () => {
-    const newCode = server.createRoom()
+  const onCreateRoom = async () => {
+    const newCode = await client.createRoom()
     setRoomCode(newCode)
   }
 
   const onDeckImport = (event: FormEvent) => {
     event.preventDefault()
-    server.importDeck(deckUrl)
+    client.importDeck(deckUrl)
+  }
+
+  if (!snapshot) {
+    return (
+      <div className={`app theme-${theme}`}>
+        <header className="hero">
+          <h1>Mortus Table</h1>
+          <p className="muted">
+            Connecting to websocket server at {wsUrl}... ({clientState.status})
+          </p>
+          {clientState.lastError ? <p className="muted">Error: {clientState.lastError}</p> : null}
+        </header>
+      </div>
+    )
   }
 
   return (
@@ -99,7 +127,7 @@ function App() {
             <button type="button" className="ghost" onClick={onCreateRoom}>
               Create new room
             </button>
-            <button type="button" className="ghost" onClick={() => server.simulateAction('Spectate', 'Entered spectate-only mode')}>
+            <button type="button" className="ghost" onClick={() => client.spectate()}>
               Spectate only
             </button>
           </div>
@@ -117,17 +145,18 @@ function App() {
             <div>
               <p className="eyebrow">Game preview</p>
               <h2>Battlefield + stack</h2>
-              <p className="muted">Authoritative resolution; clients see state diffs. Seed: {state.seed}</p>
+              <p className="muted">Authoritative resolution; clients see state diffs. Seed: {snapshot.seed}</p>
             </div>
             <div className="chips">
               <span className="chip">Seed locked</span>
               <span className="chip">Rules engine local</span>
               <span className="chip">No Supabase yet</span>
+              <span className="chip">{clientState.status === 'open' ? 'Live' : 'Offline'}</span>
             </div>
           </div>
 
           <div className="board__players">
-            {state.players.map((player) => {
+            {snapshot.players.map((player) => {
               const cards = boardByPlayer[player.name] ?? []
               return (
                 <div key={player.id} className="player">
@@ -182,7 +211,7 @@ function App() {
                 <button type="submit" className="primary">
                   Import deck
                 </button>
-                <button type="button" className="ghost" onClick={() => server.simulateAction('Upload', 'Uploaded CSV (mock)')}>
+                <button type="button" className="ghost" onClick={() => client.simulateAction('Upload', 'Uploaded CSV (mock)')}>
                   Upload CSV
                 </button>
               </div>
@@ -200,7 +229,7 @@ function App() {
               </div>
             </div>
             <ul className="ready-list">
-              {state.players.map((player) => (
+              {snapshot.players.map((player) => (
                 <li key={player.id}>
                   <span className="ready-dot" style={{ background: player.color }} />
                   <div>
@@ -212,7 +241,7 @@ function App() {
                     type="button"
                     className="ghost"
                     onClick={() =>
-                      server.updateStatus(
+                      client.updateStatus(
                         player.id,
                         player.status === 'Ready' ? 'Waiting' : player.status === 'Waiting' ? 'Testing' : 'Ready',
                       )
@@ -227,7 +256,7 @@ function App() {
                   <p>Sandbox mode</p>
                   <p className="muted small">Local rules engine · no Supabase yet</p>
                 </div>
-                <button type="button" className="ghost" onClick={() => server.simulateAction('Sandbox', 'Launched offline sandbox')}>
+                <button type="button" className="ghost" onClick={() => client.simulateAction('Sandbox', 'Launched offline sandbox')}>
                   Launch offline sandbox
                 </button>
               </li>
@@ -243,8 +272,12 @@ function App() {
               <p className="muted">Stored as JSON; deterministic with seed + resolved effects.</p>
             </div>
             <div className="chips">
-              {state.pending.map((task) => (
-                <button key={task.id} className={`chip ${task.done ? '' : 'ghost-chip'}`} onClick={() => server.togglePending(task.id)}>
+              {snapshot.pending.map((task) => (
+                <button
+                  key={task.id}
+                  className={`chip ${task.done ? '' : 'ghost-chip'}`}
+                  onClick={() => client.toggleTask(task.id)}
+                >
                   {task.done ? '✔ ' : ''}
                   {task.text}
                 </button>
@@ -252,7 +285,7 @@ function App() {
             </div>
           </div>
           <ol className="log">
-            {state.log.map((entry) => (
+            {snapshot.log.map((entry) => (
               <li key={entry.timestamp + entry.detail}>
                 <span className="log-label">{entry.label}</span>
                 <span className="log-detail">{entry.detail}</span>
