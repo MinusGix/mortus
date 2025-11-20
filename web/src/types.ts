@@ -10,7 +10,7 @@ export type PlayerSummary = {
   color: string
 }
 
-export type Zone = 'battlefield' | 'stack' | 'hand'
+export type Zone = 'battlefield' | 'stack' | 'hand' | 'graveyard' | 'exile' | 'library' | 'commander'
 
 export type BoardCard = {
   id: string

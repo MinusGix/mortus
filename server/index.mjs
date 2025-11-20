@@ -36,6 +36,15 @@ const baseBoard = () => [
   { id: '5', name: 'Mystic Remora', owner: 'Row', zone: 'battlefield', note: 'Upkeep 0' },
   { id: '6', name: 'Island', owner: 'Row', zone: 'battlefield', tapped: true },
   { id: '7', name: 'Command Tower', owner: 'Mira', zone: 'battlefield' },
+  // commander / hand / graveyard / exile
+  { id: '8', name: 'Maelstrom Wanderer', owner: 'Mira', zone: 'commander', note: 'Commander' },
+  { id: '9', name: 'Sakura-Tribe Elder', owner: 'Mira', zone: 'graveyard', note: 'Sacked for land' },
+  { id: '10', name: 'Cyclonic Rift', owner: 'Row', zone: 'exile', note: 'Exiled by Remora' },
+  { id: '11', name: 'Steam Vents', owner: 'Row', zone: 'graveyard', note: 'Fetch target' },
+  { id: '12', name: 'Brainstorm', owner: 'Row', zone: 'hand', note: 'Hand' },
+  { id: '13', name: 'Arcane Denial', owner: 'Row', zone: 'hand', note: 'Hand' },
+  { id: '14', name: 'Misty Rainforest', owner: 'Mira', zone: 'hand', note: 'Hand' },
+  { id: '15', name: 'Everflowing Chalice', owner: 'Mira', zone: 'hand', note: 'Hand' },
 ]
 
 const basePending = () => [

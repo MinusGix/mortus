@@ -7,11 +7,11 @@ const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
 const defaultRoom = import.meta.env.VITE_DEFAULT_ROOM || 'A1B2-CASCADE'
 const client = createWsClient(wsUrl)
 
-function CardList({ cards }: { cards: BoardCard[] }) {
+function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: boolean }) {
   return (
     <div className="cards">
       {cards.map((card) => (
-        <div key={card.id} className={`card ${card.tapped ? 'tapped' : ''}`}>
+        <div key={card.id} className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}>
           <p className="card__title">{card.name}</p>
           {card.note ? <p className="card__note">{card.note}</p> : null}
           <p className="card__owner">{card.owner}</p>
@@ -21,11 +21,38 @@ function CardList({ cards }: { cards: BoardCard[] }) {
   )
 }
 
+function ZonePile({
+  label,
+  count,
+  topCard,
+  variant = 'deck',
+}: {
+  label: string
+  count?: number
+  topCard?: string
+  variant?: 'deck' | 'yard' | 'exile' | 'commander'
+}) {
+  return (
+    <div className={`zone-pile ${variant}`}>
+      <div className="pile-visual">
+        <div className="layer layer-1" />
+        <div className="layer layer-2" />
+        <div className="layer layer-3" />
+        <div className="pile-face">
+          <span className="pile-label">{label}</span>
+          {topCard ? <span className="pile-card">{topCard}</span> : null}
+          {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function App() {
   const [theme, setTheme] = useState<'vintage' | 'modern'>('vintage')
   const [roomCode, setRoomCode] = useState(defaultRoom)
-  const [deckUrl, setDeckUrl] = useState('https://www.moxfield.com/decks/sample')
   const [clientState, setClientState] = useState<ClientState>(client.getState())
+  const [handOpen, setHandOpen] = useState(false)
 
   useEffect(() => {
     const unsubscribe = client.subscribe(setClientState)
@@ -46,10 +73,14 @@ function App() {
 
   const snapshot = clientState.snapshot
 
-  const boardByPlayer = useMemo(() => {
+  const groupByZone = useMemo(() => {
     if (!snapshot) return {}
-    return snapshot.players.reduce<Record<string, BoardCard[]>>((acc, player) => {
-      acc[player.name] = snapshot.board.filter((card) => card.owner === player.name)
+    return snapshot.players.reduce<Record<string, Record<string, BoardCard[]>>>((acc, player) => {
+      const playerCards = snapshot.board.filter((card) => card.owner === player.name)
+      acc[player.name] = playerCards.reduce<Record<string, BoardCard[]>>((zones, card) => {
+        zones[card.zone] = zones[card.zone] ? [...zones[card.zone], card] : [card]
+        return zones
+      }, {})
       return acc
     }, {})
   }, [snapshot])
@@ -62,11 +93,6 @@ function App() {
   const onCreateRoom = async () => {
     const newCode = await client.createRoom()
     setRoomCode(newCode)
-  }
-
-  const onDeckImport = (event: FormEvent) => {
-    event.preventDefault()
-    client.importDeck(deckUrl)
   }
 
   if (!snapshot) {
@@ -82,6 +108,15 @@ function App() {
       </div>
     )
   }
+
+  const hero = snapshot.players[0]
+  const opponents = snapshot.players.slice(1)
+  const heroZones = groupByZone[hero.name] || {}
+  const heroBattlefield = heroZones.battlefield || []
+  const heroHand = heroZones.hand || []
+  const heroCom = heroZones.commander?.[0]
+  const heroYard = heroZones.graveyard || []
+  const heroExile = heroZones.exile || []
 
   return (
     <div className={`app theme-${theme}`}>
@@ -140,127 +175,108 @@ function App() {
       </header>
 
       <main className="content">
-        <section className="panel board">
+        <section className="panel playmat">
           <div className="panel__header">
             <div>
-              <p className="eyebrow">Game preview</p>
-              <h2>Battlefield + stack</h2>
-              <p className="muted">Authoritative resolution; clients see state diffs. Seed: {snapshot.seed}</p>
+              <p className="eyebrow">Table view</p>
+              <h2>Live board · hand · zones</h2>
+              <p className="muted">Seed: {snapshot.seed}</p>
             </div>
             <div className="chips">
-              <span className="chip">Seed locked</span>
-              <span className="chip">Rules engine local</span>
-              <span className="chip">No Supabase yet</span>
-              <span className="chip">{clientState.status === 'open' ? 'Live' : 'Offline'}</span>
+              <span className="chip">{clientState.status === 'open' ? 'Live websocket' : 'Offline'}</span>
+              <span className="chip">Stub cards</span>
+              <span className="chip">Commander ready</span>
             </div>
           </div>
 
-          <div className="board__players">
-            {snapshot.players.map((player) => {
-              const cards = boardByPlayer[player.name] ?? []
-              return (
-                <div key={player.id} className="player">
-                  <div className="player__meta">
-                    <div className="player__life" style={{ borderColor: player.color }}>
-                      {player.life}
-                      <span>life</span>
+          <div className="tabletop">
+            <div className="opponent-row">
+              {opponents.map((opponent) => {
+                const zones = groupByZone[opponent.name] || {}
+                const opponentBattlefield = zones.battlefield || []
+                const opponentStack = zones.stack || []
+                const opponentYard = zones.graveyard || []
+                const opponentExile = zones.exile || []
+                const commander = zones.commander?.[0]
+                return (
+                  <div key={opponent.id} className="seat opponent">
+                    <div className="seat__header">
+                      <div>
+                        <p className="eyebrow">{opponent.status}</p>
+                        <p className="player__name">{opponent.name}</p>
+                        <p className="muted small">{opponent.deck}</p>
+                      </div>
+                      <div className="player__life small-life" style={{ borderColor: opponent.color }}>
+                        {opponent.life}
+                      </div>
                     </div>
-                    <div>
-                      <p className="eyebrow">{player.status}</p>
-                      <p className="player__name">{player.name}</p>
-                      <p className="muted">{player.deck}</p>
-                      <p className="commander">Commander · {player.commander}</p>
+                    <div className="seat__zones">
+                      <div className="pile-column">
+                        <ZonePile label="Library" count={60} variant="deck" />
+                        <ZonePile label="Commander" topCard={commander?.name} variant="commander" />
+                        <ZonePile label="Exile" topCard={opponentExile[0]?.name} variant="exile" />
+                        <ZonePile label="Graveyard" topCard={opponentYard[0]?.name} variant="yard" />
+                      </div>
+                      <div className="battlefield">
+                        <CardList cards={opponentBattlefield} />
+                        {opponentStack.length ? (
+                          <div className="stack-callout">
+                            <p className="zone__label">Stack</p>
+                            <CardList cards={opponentStack} compact />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                  <div className="player__zones">
-                    <div className="zone">
-                      <p className="zone__label">Battlefield</p>
-                      <CardList cards={cards.filter((card) => card.zone === 'battlefield')} />
-                    </div>
-                    <div className="zone stack-zone">
-                      <p className="zone__label">Stack</p>
-                      <CardList cards={cards.filter((card) => card.zone === 'stack')} />
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
+                )
+              })}
+            </div>
 
-        <section className="panel grid">
-          <div className="subpanel">
-            <div className="panel__header">
-              <div>
-                <p className="eyebrow">Deck ingest</p>
-                <h3>Pull from Moxfield or CSV</h3>
-                <p className="muted">Normalize into card IDs; hash to prevent tampering.</p>
-              </div>
-              <span className="chip">Scryfall cache ready</span>
-            </div>
-            <form className="deck-form" onSubmit={onDeckImport}>
-              <label className="field">
-                <span>Deck URL</span>
-                <input
-                  value={deckUrl}
-                  onChange={(e) => setDeckUrl(e.target.value)}
-                  placeholder="https://www.moxfield.com/decks/..."
-                />
-              </label>
-              <div className="deck-actions">
-                <button type="submit" className="primary">
-                  Import deck
-                </button>
-                <button type="button" className="ghost" onClick={() => client.simulateAction('Upload', 'Uploaded CSV (mock)')}>
-                  Upload CSV
-                </button>
-              </div>
-              <p className="muted small">
-                Decks are parsed client-side for now; server validation comes with the first backend pass.
-              </p>
-            </form>
-          </div>
-          <div className="subpanel">
-            <div className="panel__header">
-              <div>
-                <p className="eyebrow">Lobby state</p>
-                <h3>Ready check & seat order</h3>
-                <p className="muted">When all players ready, game seed is finalized.</p>
-              </div>
-            </div>
-            <ul className="ready-list">
-              {snapshot.players.map((player) => (
-                <li key={player.id}>
-                  <span className="ready-dot" style={{ background: player.color }} />
-                  <div>
-                    <p>{player.name}</p>
-                    <p className="muted small">{player.deck}</p>
-                  </div>
-                  <span className={`pill pill-${player.status.toLowerCase()}`}>{player.status}</span>
-                  <button
-                    type="button"
-                    className="ghost"
-                    onClick={() =>
-                      client.updateStatus(
-                        player.id,
-                        player.status === 'Ready' ? 'Waiting' : player.status === 'Waiting' ? 'Testing' : 'Ready',
-                      )
-                    }
-                  >
-                    Cycle status
-                  </button>
-                </li>
-              ))}
-              <li className="sandbox-callout">
+            <div className="seat hero">
+              <div className="seat__header">
                 <div>
-                  <p>Sandbox mode</p>
-                  <p className="muted small">Local rules engine · no Supabase yet</p>
+                  <p className="eyebrow">{hero.status}</p>
+                  <p className="player__name">{hero.name}</p>
+                  <p className="muted small">{hero.deck}</p>
+                  <p className="commander">Commander · {hero.commander}</p>
                 </div>
-                <button type="button" className="ghost" onClick={() => client.simulateAction('Sandbox', 'Launched offline sandbox')}>
-                  Launch offline sandbox
-                </button>
-              </li>
-            </ul>
+                <div className="player__life" style={{ borderColor: hero.color }}>
+                  {hero.life}
+                  <span>life</span>
+                </div>
+              </div>
+              <div className="seat__zones">
+                <div className="pile-column">
+                  <ZonePile label="Library" count={60} variant="deck" />
+                  <ZonePile label="Commander" topCard={heroCom?.name} variant="commander" />
+                  <ZonePile label="Exile" topCard={heroExile[0]?.name} variant="exile" />
+                  <ZonePile label="Graveyard" topCard={heroYard[0]?.name} variant="yard" />
+                </div>
+                <div className="battlefield">
+                  <CardList cards={heroBattlefield} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`hand-drawer ${handOpen ? 'open' : ''}`}
+            onMouseEnter={() => setHandOpen(true)}
+            onMouseLeave={() => setHandOpen(false)}
+          >
+            <div className="hand-header">
+              <span>Hand</span>
+              <span className="muted small">{heroHand.length} cards</span>
+            </div>
+            <div className="hand-cards">
+              {heroHand.map((card, idx) => (
+                <div key={card.id} className="card hand-card" style={{ transform: `translateX(-${idx * 16}px)` }}>
+                  <p className="card__title">{card.name}</p>
+                  <p className="card__note">Hand</p>
+                </div>
+              ))}
+              {!heroHand.length ? <p className="muted">No cards in hand</p> : null}
+            </div>
           </div>
         </section>
 
