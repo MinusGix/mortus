@@ -54,11 +54,22 @@ body {
   color: var(--text-primary);
 }
 
+html,
+body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
 #root {
   width: 100%;
   max-width: none;
   margin: 0;
   padding: 1.5rem 1.5rem 2.5rem;
+  min-height: 100vh;
+  height: 100vh;
 }
 
 a {
