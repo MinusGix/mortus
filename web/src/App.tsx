@@ -1,5 +1,6 @@
 import './App.css'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { BrowserRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { type BoardCard } from './types'
 import { createWsClient, type ClientState } from './wsClient'
 
@@ -48,75 +49,37 @@ function ZonePile({
   )
 }
 
-function App() {
-  const [theme, setTheme] = useState<'vintage' | 'modern'>('vintage')
-  const [roomCode, setRoomCode] = useState(defaultRoom)
+function useClientState() {
   const [clientState, setClientState] = useState<ClientState>(client.getState())
-  const [handOpen, setHandOpen] = useState(false)
 
   useEffect(() => {
     const unsubscribe = client.subscribe(setClientState)
     client.connect()
-    client.joinRoom(defaultRoom).catch(() => {
-      setClientState((prev) => ({ ...prev, lastError: 'Unable to join default room' }))
-    })
     return unsubscribe
   }, [])
 
-  useEffect(() => {
-    if (clientState.room) setRoomCode(clientState.room)
-  }, [clientState.room])
+  return clientState
+}
 
-  useEffect(() => {
-    document.body.classList.toggle('theme-modern', theme === 'modern')
-  }, [theme])
-
-  const snapshot = clientState.snapshot
-
-  const groupByZone = useMemo(() => {
-    if (!snapshot) return {}
-    return snapshot.players.reduce<Record<string, Record<string, BoardCard[]>>>((acc, player) => {
-      const playerCards = snapshot.board.filter((card) => card.owner === player.name)
-      acc[player.name] = playerCards.reduce<Record<string, BoardCard[]>>((zones, card) => {
-        zones[card.zone] = zones[card.zone] ? [...zones[card.zone], card] : [card]
-        return zones
-      }, {})
-      return acc
-    }, {})
-  }, [snapshot])
+function Landing({
+  theme,
+  setTheme,
+}: {
+  theme: 'vintage' | 'modern'
+  setTheme: (t: 'vintage' | 'modern') => void
+}) {
+  const navigate = useNavigate()
+  const [roomInput, setRoomInput] = useState(defaultRoom)
 
   const onJoin = (event: FormEvent) => {
     event.preventDefault()
-    client.joinRoom(roomCode)
+    navigate(`/room/${encodeURIComponent(roomInput)}`)
   }
 
-  const onCreateRoom = async () => {
-    const newCode = await client.createRoom()
-    setRoomCode(newCode)
+  const onCreate = async () => {
+    const code = await client.createRoom()
+    navigate(`/room/${encodeURIComponent(code)}`)
   }
-
-  if (!snapshot) {
-    return (
-      <div className={`app theme-${theme}`}>
-        <header className="hero">
-          <h1>Mortus Table</h1>
-          <p className="muted">
-            Connecting to websocket server at {wsUrl}... ({clientState.status})
-          </p>
-          {clientState.lastError ? <p className="muted">Error: {clientState.lastError}</p> : null}
-        </header>
-      </div>
-    )
-  }
-
-  const hero = snapshot.players[0]
-  const opponents = snapshot.players.slice(1)
-  const heroZones = groupByZone[hero.name] || {}
-  const heroBattlefield = heroZones.battlefield || []
-  const heroHand = heroZones.hand || []
-  const heroCom = heroZones.commander?.[0]
-  const heroYard = heroZones.graveyard || []
-  const heroExile = heroZones.exile || []
 
   return (
     <div className={`app theme-${theme}`}>
@@ -150,8 +113,8 @@ function App() {
           <label className="field">
             <span>Room code</span>
             <input
-              value={roomCode}
-              onChange={(e) => setRoomCode(e.target.value)}
+              value={roomInput}
+              onChange={(e) => setRoomInput(e.target.value)}
               placeholder="e.g. FIRE-LAPSE"
             />
           </label>
@@ -159,10 +122,10 @@ function App() {
             <button type="submit" className="primary">
               Join room
             </button>
-            <button type="button" className="ghost" onClick={onCreateRoom}>
+            <button type="button" className="ghost" onClick={onCreate}>
               Create new room
             </button>
-            <button type="button" className="ghost" onClick={() => client.spectate()}>
+            <button type="button" className="ghost" onClick={() => navigate('/room/SPECTATE')}>
               Spectate only
             </button>
           </div>
@@ -173,22 +136,98 @@ function App() {
           <div className="fact">Replays store actions + resolved effects to survive code changes.</div>
         </div>
       </header>
+    </div>
+  )
+}
+
+function Board({
+  theme,
+  setTheme,
+}: {
+  theme: 'vintage' | 'modern'
+  setTheme: (t: 'vintage' | 'modern') => void
+}) {
+  const { roomCode } = useParams<{ roomCode: string }>()
+  const [handOpen, setHandOpen] = useState(false)
+  const clientState = useClientState()
+  const snapshot = clientState.snapshot
+
+  useEffect(() => {
+    if (roomCode) {
+      client.joinRoom(roomCode)
+    }
+  }, [roomCode])
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-modern', theme === 'modern')
+  }, [theme])
+
+  const groupByZone = useMemo(() => {
+    if (!snapshot) return {}
+    return snapshot.players.reduce<Record<string, Record<string, BoardCard[]>>>((acc, player) => {
+      const playerCards = snapshot.board.filter((card) => card.owner === player.name)
+      acc[player.name] = playerCards.reduce<Record<string, BoardCard[]>>((zones, card) => {
+        zones[card.zone] = zones[card.zone] ? [...zones[card.zone], card] : [card]
+        return zones
+      }, {})
+      return acc
+    }, {})
+  }, [snapshot])
+
+  if (!snapshot) {
+    return (
+      <div className={`app theme-${theme}`}>
+        <header className="hero">
+          <h1>Loading room…</h1>
+          <p className="muted">
+            Connecting to websocket server at {wsUrl}... ({clientState.status})
+          </p>
+          {clientState.lastError ? <p className="muted">Error: {clientState.lastError}</p> : null}
+        </header>
+      </div>
+    )
+  }
+
+  const hero = snapshot.players[0]
+  const opponents = snapshot.players.slice(1)
+  const heroZones = groupByZone[hero.name] || {}
+  const heroBattlefield = heroZones.battlefield || []
+  const heroHand = heroZones.hand || []
+  const heroCom = heroZones.commander?.[0]
+  const heroYard = heroZones.graveyard || []
+  const heroExile = heroZones.exile || []
+
+  return (
+    <div className={`app theme-${theme}`}>
+      <div className="room-bar">
+        <div>
+          <p className="eyebrow">Room {roomCode}</p>
+          <h2>{snapshot.seed}</h2>
+        </div>
+        <div className="chips">
+          <span className="chip">{clientState.status === 'open' ? 'Live websocket' : 'Offline'}</span>
+          <span className="chip">Stub cards</span>
+          <span className="chip">Commander ready</span>
+          <div className="theme-toggle">
+            <span>Theme</span>
+            <div className="toggle-switch" role="group" aria-label="Choose theme">
+              {(['vintage', 'modern'] as const).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  className={option === theme ? 'active' : ''}
+                  onClick={() => setTheme(option)}
+                >
+                  {option === 'vintage' ? 'Vintage' : 'Modern'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <main className="content">
         <section className="panel playmat">
-          <div className="panel__header">
-            <div>
-              <p className="eyebrow">Table view</p>
-              <h2>Live board · hand · zones</h2>
-              <p className="muted">Seed: {snapshot.seed}</p>
-            </div>
-            <div className="chips">
-              <span className="chip">{clientState.status === 'open' ? 'Live websocket' : 'Offline'}</span>
-              <span className="chip">Stub cards</span>
-              <span className="chip">Commander ready</span>
-            </div>
-          </div>
-
           <div className="tabletop">
             <div className="opponent-row">
               {opponents.map((opponent) => {
@@ -285,7 +324,6 @@ function App() {
             <div>
               <p className="eyebrow">Replay stream</p>
               <h3>Action log</h3>
-              <p className="muted">Stored as JSON; deterministic with seed + resolved effects.</p>
             </div>
             <div className="chips">
               {snapshot.pending.map((task) => (
@@ -311,6 +349,23 @@ function App() {
         </section>
       </main>
     </div>
+  )
+}
+
+function App() {
+  const [theme, setTheme] = useState<'vintage' | 'modern'>('vintage')
+
+  useEffect(() => {
+    document.body.classList.toggle('theme-modern', theme === 'modern')
+  }, [theme])
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Landing theme={theme} setTheme={setTheme} />} />
+        <Route path="/room/:roomCode" element={<Board theme={theme} setTheme={setTheme} />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
