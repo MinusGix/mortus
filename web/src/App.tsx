@@ -289,6 +289,16 @@ function Board({
     }
   }, [opponents, activeOpponentId])
 
+  useEffect(() => {
+    setRecentDecks(loadRecentDecks())
+  }, [])
+
+  useEffect(() => {
+    if (!deckUrl && recentDecks.length) {
+      setDeckUrl(recentDecks[0])
+    }
+  }, [recentDecks, deckUrl])
+
   if (!snapshot) {
     return (
       <div className={`app theme-${theme}`}>
@@ -334,16 +344,6 @@ function Board({
   const toggleZones = (opponentId: string) => {
     setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
   }
-
-  useEffect(() => {
-    setRecentDecks(loadRecentDecks())
-  }, [])
-
-  useEffect(() => {
-    if (!deckUrl && recentDecks.length) {
-      setDeckUrl(recentDecks[0])
-    }
-  }, [recentDecks, deckUrl])
 
   const onImportDeck = async (event: FormEvent) => {
     event.preventDefault()
