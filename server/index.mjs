@@ -123,6 +123,8 @@ const normalizeId = (raw) => {
   }
 }
 
+const CARD_BACK_URL = process.env.CARD_BACK_URL || 'https://cards.scryfall.io/normal/back/5/3/532746e2-f822-4920-ab31-94e0c8baaa84.jpg'
+
 const scryfallImageFromId = (id) => {
   if (!id || typeof id !== 'string' || id.length < 2) return null
   const safe = id.toLowerCase()
@@ -132,7 +134,7 @@ const scryfallImageFromId = (id) => {
 const scryfallBackFromId = (id) => {
   if (!id || typeof id !== 'string' || id.length < 2) return null
   const safe = id.toLowerCase()
-  return `https://cards.scryfall.io/back/${safe[0]}/${safe[1]}/${safe}.jpg`
+  return CARD_BACK_URL || `https://cards.scryfall.io/back/${safe[0]}/${safe[1]}/${safe}.jpg`
 }
 
 const simplifyCard = (card) => {

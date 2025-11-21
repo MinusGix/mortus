@@ -7,6 +7,7 @@ import { createWsClient, type ClientState } from './wsClient'
 
 const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
 const defaultRoom = import.meta.env.VITE_DEFAULT_ROOM || 'A1B2-CASCADE'
+const defaultCardBack = import.meta.env.VITE_CARD_BACK_URL || 'https://cards.scryfall.io/normal/back/5/3/532746e2-f822-4920-ab31-94e0c8baaa84.jpg'
 const client = createWsClient(wsUrl)
 const recentDeckStorageKey = 'mortus-recent-decks'
 
@@ -36,7 +37,7 @@ function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: bo
         <div key={card.id} className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}>
           {card.image || card.backImage ? (
             <>
-              <img className="card__image" src={card.image || card.backImage || ''} alt={card.name} />
+              <img className="card__image" src={card.image || card.backImage || defaultCardBack} alt={card.name} />
               <div className="card__vignette" />
             </>
           ) : null}
@@ -63,7 +64,7 @@ function ZonePile({
   topCard?: BoardCard
   variant?: 'deck' | 'yard' | 'exile' | 'commander'
 }) {
-  const topImage = topCard?.image || topCard?.backImage
+  const topImage = topCard?.image || topCard?.backImage || (variant === 'deck' && count ? defaultCardBack : null)
   return (
     <div className={`zone-pile ${variant}`}>
       <div className="pile-visual">
@@ -363,6 +364,7 @@ function Board({
   const activeOpponentExile = activeOpponentZones.exile || []
   const activeOpponentCommanders = activeOpponentZones.commander || []
   const activeOpponentLibrary = activeOpponentZones.library || []
+  const activeOpponentLibraryTop = activeOpponentLibrary.length ? { name: 'Library', backImage: defaultCardBack } : null
   const heroZones = groupByZone[hero.name] || {}
   const heroBattlefield = heroZones.battlefield || []
   const heroHand = heroZones.hand || []
@@ -370,6 +372,7 @@ function Board({
   const heroYard = heroZones.graveyard || []
   const heroExile = heroZones.exile || []
   const heroLibrary = heroZones.library || []
+  const heroLibraryTop = heroLibrary.length ? { name: 'Library', backImage: defaultCardBack } : null
   const heroExileTop = heroExile[0]
   const heroYardTop = heroYard[0]
   const activeOpponentExileTop = activeOpponentExile[0]
@@ -458,7 +461,12 @@ function Board({
 
                     <div className={`zone-dropdown ${openZones[activeOpponent.id] ? 'open' : ''}`}>
                       <div className="pile-row">
-                        <ZonePile label="Library" count={activeOpponentLibrary.length} variant="deck" />
+                        <ZonePile
+                          label="Library"
+                          count={activeOpponentLibrary.length}
+                          topCard={activeOpponentLibraryTop || undefined}
+                          variant="deck"
+                        />
                         <CommanderZone label="Commander" cards={activeOpponentCommanders} />
                         <ZonePile label="Exile" topCard={activeOpponentExileTop} variant="exile" />
                         <ZonePile label="Graveyard" topCard={activeOpponentYardTop} variant="yard" />
@@ -483,7 +491,7 @@ function Board({
                 </div>
                 <div className="seat__zones">
                   <div className="pile-column">
-                    <ZonePile label="Library" count={heroLibrary.length} variant="deck" />
+                    <ZonePile label="Library" count={heroLibrary.length} topCard={heroLibraryTop || undefined} variant="deck" />
                     <CommanderZone label="Commander" cards={heroCommanders} />
                     <ZonePile label="Exile" topCard={heroExileTop} variant="exile" />
                     <ZonePile label="Graveyard" topCard={heroYardTop} variant="yard" />
