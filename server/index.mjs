@@ -123,6 +123,43 @@ const normalizeId = (raw) => {
   }
 }
 
+const simplifyCard = (card) => {
+  if (!card) return null
+  const print = card.print || card.card || card
+  return {
+    name: print.name,
+    manaCost: print.manaCost || print.mana_cost || card.manaCost || null,
+    typeLine: print.typeLine || print.type_line || card.typeLine || null,
+    oracleText: print.oracleText || print.oracle_text || card.oracleText || null,
+    image: print.image || print.image_uris?.normal || print.image_uris?.large || null,
+    scryfallId: print.scryfallId || print.scryfall_id || print.scryfallId ?? null,
+    legalities: print.legalities || card.legalities || null,
+    colors: print.color_identity || print.colors || card.colors || null,
+  }
+}
+
+const simplifyDeck = (deck) => {
+  const boards = deck.boards || {}
+  const mapCards = (board = {}) =>
+    Object.entries(board.cards || board).reduce((acc, [key, card]) => {
+      acc[key] = {
+        quantity: card.quantity || card.qty || card.count || 1,
+        card: simplifyCard(card.card || card),
+      }
+      return acc
+    }, {})
+
+  return {
+    id: deck.id,
+    name: deck.name,
+    commanders: mapCards(boards.commanders),
+    mainboard: mapCards(boards.mainboard),
+    sideboard: mapCards(boards.sideboard),
+    maybeboard: mapCards(boards.maybeboard),
+    companions: mapCards(boards.companions),
+  }
+}
+
 const fetchMoxfield = async (idOrUrl) => {
   const id = normalizeId(idOrUrl)
   if (moxfieldCache[id]) {
@@ -130,7 +167,7 @@ const fetchMoxfield = async (idOrUrl) => {
   }
   const api = new MoxfieldApi()
   const deck = await api.deckList.findById(id)
-  const record = { deck, fetchedAt: Date.now() }
+  const record = { deck: simplifyDeck(deck), fetchedAt: Date.now() }
   moxfieldCache[id] = record
   saveCache()
   return { id, deck, fetchedAt: record.fetchedAt, cached: false }
