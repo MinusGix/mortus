@@ -123,16 +123,45 @@ const normalizeId = (raw) => {
   }
 }
 
+const scryfallImageFromId = (id) => {
+  if (!id || typeof id !== 'string' || id.length < 2) return null
+  const safe = id.toLowerCase()
+  return `https://cards.scryfall.io/normal/front/${safe[0]}/${safe[1]}/${safe}.jpg`
+}
+
+const scryfallBackFromId = (id) => {
+  if (!id || typeof id !== 'string' || id.length < 2) return null
+  const safe = id.toLowerCase()
+  return `https://cards.scryfall.io/back/${safe[0]}/${safe[1]}/${safe}.jpg`
+}
+
 const simplifyCard = (card) => {
   if (!card) return null
   const print = card.print || card.card || card
   const scryfallId = print.scryfallId ?? print.scryfall_id ?? card.scryfallId ?? card.scryfall_id ?? null
+  const image =
+    print.image ||
+    print.image_uris?.normal ||
+    print.image_uris?.large ||
+    print.images?.normal ||
+    print.images?.large ||
+    print.card_faces?.[0]?.image_uris?.normal ||
+    print.card_faces?.[0]?.image_uris?.large ||
+    (scryfallId ? scryfallImageFromId(scryfallId) : null) ||
+    null
+  const backImage =
+    print.image_back ||
+    print.card_faces?.[1]?.image_uris?.normal ||
+    print.card_faces?.[1]?.image_uris?.large ||
+    (scryfallId ? scryfallBackFromId(scryfallId) : null) ||
+    null
   return {
     name: print.name,
     manaCost: print.manaCost || print.mana_cost || card.manaCost || null,
     typeLine: print.typeLine || print.type_line || card.typeLine || null,
     oracleText: print.oracleText || print.oracle_text || card.oracleText || null,
-    image: print.image || print.image_uris?.normal || print.image_uris?.large || null,
+    image,
+    backImage,
     scryfallId,
     legalities: print.legalities || card.legalities || null,
     colors: print.color_identity || print.colors || card.colors || null,
@@ -161,16 +190,42 @@ const simplifyDeck = (deck) => {
   }
 }
 
+const upgradeDeckImages = (deck) => {
+  const mapBoard = (board = {}) =>
+    Object.fromEntries(
+      Object.entries(board || {}).map(([key, entry]) => {
+        const card = entry?.card || {}
+        const withImage = card.image
+          ? card
+          : card.scryfallId
+            ? { ...card, image: scryfallImageFromId(card.scryfallId), backImage: scryfallBackFromId(card.scryfallId) }
+            : card
+        return [key, { ...entry, card: withImage }]
+      }),
+    )
+
+  return {
+    ...deck,
+    commanders: mapBoard(deck.commanders),
+    mainboard: mapBoard(deck.mainboard),
+    sideboard: mapBoard(deck.sideboard),
+    maybeboard: mapBoard(deck.maybeboard),
+    companions: mapBoard(deck.companions),
+  }
+}
+
 const fetchMoxfield = async (idOrUrl) => {
   const id = normalizeId(idOrUrl)
   if (moxfieldCache[id]) {
     const entry = moxfieldCache[id]
     if (entry.deck && entry.deck.mainboard) {
-      return { id, deck: entry.deck, fetchedAt: entry.fetchedAt, cached: true }
+      const deck = upgradeDeckImages(entry.deck)
+      moxfieldCache[id] = { ...entry, deck }
+      return { id, deck, fetchedAt: entry.fetchedAt, cached: true }
     }
     if (entry.deck && entry.deck.boards) {
       const simplified = simplifyDeck(entry.deck)
-      const record = { deck: simplified, fetchedAt: entry.fetchedAt || Date.now() }
+      const record = { deck: upgradeDeckImages(simplified), fetchedAt: entry.fetchedAt || Date.now() }
       moxfieldCache[id] = record
       saveCache()
       return { id, deck: simplified, fetchedAt: record.fetchedAt, cached: true }
@@ -178,7 +233,7 @@ const fetchMoxfield = async (idOrUrl) => {
   }
   const api = new MoxfieldApi()
   const deck = await api.deckList.findById(id)
-  const record = { deck: simplifyDeck(deck), fetchedAt: Date.now() }
+  const record = { deck: upgradeDeckImages(simplifyDeck(deck)), fetchedAt: Date.now() }
   moxfieldCache[id] = record
   saveCache()
   return { id, deck, fetchedAt: record.fetchedAt, cached: false }
@@ -217,6 +272,7 @@ const buildBoardFromDeck = (deck, players) => {
           typeLine: card.typeLine || null,
           oracleText: card.oracleText || null,
           image: card.image || null,
+          backImage: card.backImage || scryfallBackFromId(card.scryfallId) || null,
           scryfallId: card.scryfallId || null,
           legalities: card.legalities || null,
           colors: card.colors || null,
@@ -241,6 +297,7 @@ const buildBoardFromDeck = (deck, players) => {
           typeLine: card.typeLine || null,
           oracleText: card.oracleText || null,
           image: card.image || null,
+          backImage: card.backImage || scryfallBackFromId(card.scryfallId) || null,
           scryfallId: card.scryfallId || null,
           legalities: card.legalities || null,
           colors: card.colors || null,

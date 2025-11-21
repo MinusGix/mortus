@@ -23,6 +23,7 @@ export type BoardCard = {
   typeLine?: string | null
   oracleText?: string | null
   image?: string | null
+  backImage?: string | null
   scryfallId?: string | null
   legalities?: Record<string, string> | null
   colors?: string[] | null

@@ -34,9 +34,18 @@ function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: bo
     <div className="cards">
       {cards.map((card) => (
         <div key={card.id} className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}>
-          <p className="card__title">{card.name}</p>
-          {card.note ? <p className="card__note">{card.note}</p> : null}
-          <p className="card__owner">{card.owner}</p>
+          {card.image || card.backImage ? (
+            <>
+              <img className="card__image" src={card.image || card.backImage || ''} alt={card.name} />
+              <div className="card__vignette" />
+            </>
+          ) : null}
+          {!card.image && !card.backImage ? (
+            <div className="card__content">
+              <p className="card__title">{card.name}</p>
+              {card.note ? <p className="card__note">{card.note}</p> : null}
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
@@ -51,9 +60,10 @@ function ZonePile({
 }: {
   label: string
   count?: number
-  topCard?: string
+  topCard?: BoardCard
   variant?: 'deck' | 'yard' | 'exile' | 'commander'
 }) {
+  const topImage = topCard?.image || topCard?.backImage
   return (
     <div className={`zone-pile ${variant}`}>
       <div className="pile-visual">
@@ -62,10 +72,30 @@ function ZonePile({
         <div className="layer layer-3" />
         <div className="pile-face">
           <span className="pile-label">{label}</span>
-          {topCard ? <span className="pile-card">{topCard}</span> : null}
+          {topImage ? (
+            <div className="pile-thumb">
+              <img src={topImage} alt={topCard?.name || label} />
+              <span className="pile-thumb__caption">{topCard.name}</span>
+            </div>
+          ) : topCard ? (
+            <span className="pile-card">{topCard.name}</span>
+          ) : null}
           {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
         </div>
       </div>
+    </div>
+  )
+}
+
+function CommanderZone({ cards, label }: { cards: BoardCard[]; label: string }) {
+  if (!cards.length) {
+    return <ZonePile label={label} variant="commander" />
+  }
+
+  return (
+    <div className="commander-zone">
+      <p className="zone__label">{label}</p>
+      <CardList cards={cards} compact />
     </div>
   )
 }
@@ -331,15 +361,19 @@ function Board({
   const activeOpponentStack = activeOpponentZones.stack || []
   const activeOpponentYard = activeOpponentZones.graveyard || []
   const activeOpponentExile = activeOpponentZones.exile || []
-  const activeOpponentCom = activeOpponentZones.commander?.[0]
+  const activeOpponentCommanders = activeOpponentZones.commander || []
   const activeOpponentLibrary = activeOpponentZones.library || []
   const heroZones = groupByZone[hero.name] || {}
   const heroBattlefield = heroZones.battlefield || []
   const heroHand = heroZones.hand || []
-  const heroCom = heroZones.commander?.[0]
+  const heroCommanders = heroZones.commander || []
   const heroYard = heroZones.graveyard || []
   const heroExile = heroZones.exile || []
   const heroLibrary = heroZones.library || []
+  const heroExileTop = heroExile[0]
+  const heroYardTop = heroYard[0]
+  const activeOpponentExileTop = activeOpponentExile[0]
+  const activeOpponentYardTop = activeOpponentYard[0]
 
   const toggleZones = (opponentId: string) => {
     setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
@@ -425,9 +459,9 @@ function Board({
                     <div className={`zone-dropdown ${openZones[activeOpponent.id] ? 'open' : ''}`}>
                       <div className="pile-row">
                         <ZonePile label="Library" count={activeOpponentLibrary.length} variant="deck" />
-                        <ZonePile label="Commander" topCard={activeOpponentCom?.name} variant="commander" />
-                        <ZonePile label="Exile" topCard={activeOpponentExile[0]?.name} variant="exile" />
-                        <ZonePile label="Graveyard" topCard={activeOpponentYard[0]?.name} variant="yard" />
+                        <CommanderZone label="Commander" cards={activeOpponentCommanders} />
+                        <ZonePile label="Exile" topCard={activeOpponentExileTop} variant="exile" />
+                        <ZonePile label="Graveyard" topCard={activeOpponentYardTop} variant="yard" />
                       </div>
                     </div>
                   </div>
@@ -450,9 +484,9 @@ function Board({
                 <div className="seat__zones">
                   <div className="pile-column">
                     <ZonePile label="Library" count={heroLibrary.length} variant="deck" />
-                    <ZonePile label="Commander" topCard={heroCom?.name} variant="commander" />
-                    <ZonePile label="Exile" topCard={heroExile[0]?.name} variant="exile" />
-                    <ZonePile label="Graveyard" topCard={heroYard[0]?.name} variant="yard" />
+                    <CommanderZone label="Commander" cards={heroCommanders} />
+                    <ZonePile label="Exile" topCard={heroExileTop} variant="exile" />
+                    <ZonePile label="Graveyard" topCard={heroYardTop} variant="yard" />
                   </div>
                   <div className="battlefield">
                     <CardList cards={heroBattlefield} />

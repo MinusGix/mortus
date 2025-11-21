@@ -626,11 +626,11 @@ button.ghost {
   height: 168px;
   background: var(--card);
   border-radius: 12px;
-  padding: 0.65rem;
   border: 1px solid var(--stroke);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
   position: relative;
   overflow: hidden;
+  display: flex;
 }
 
 .card-compact {
@@ -643,21 +643,41 @@ button.ghost {
   opacity: 0.9;
 }
 
+.card__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card__vignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.65));
+}
+
+.card__content {
+  position: relative;
+  z-index: 1;
+  padding: 0.65rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  justify-content: space-between;
+}
+
 .card__title {
   font-weight: 700;
   margin: 0 0 0.25rem;
+  color: var(--text-primary);
 }
 
 .card__note {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.95rem;
-}
-
-.card__owner {
-  margin: 0.4rem 0 0;
-  font-size: 0.9rem;
-  color: var(--text-muted);
 }
 
 .stack-callout {
@@ -734,11 +754,40 @@ button.ghost {
 .pile-card {
   color: var(--text-muted);
   font-size: 0.95rem;
+  word-break: break-word;
 }
 
 .pile-count {
   justify-self: end;
   font-weight: 700;
+}
+
+.pile-thumb {
+  position: relative;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--stroke);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+}
+
+.pile-thumb img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.pile-thumb__caption {
+  display: block;
+  padding: 0.25rem 0.4rem;
+  background: rgba(0, 0, 0, 0.5);
+  color: #f8f8f8;
+  font-size: 0.85rem;
+}
+
+.commander-zone {
+  display: grid;
+  gap: 0.3rem;
 }
 
 .zones-toggle {
