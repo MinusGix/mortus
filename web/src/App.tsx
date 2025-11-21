@@ -150,8 +150,12 @@ function Board({
   const { roomCode } = useParams<{ roomCode: string }>()
   const [handOpen, setHandOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
+  const [openZones, setOpenZones] = useState<Record<string, boolean>>({})
   const clientState = useClientState()
   const snapshot = clientState.snapshot
+  const opponents = snapshot?.players.slice(1) ?? []
+  const hero = snapshot?.players[0]
 
   useEffect(() => {
     if (roomCode) {
@@ -175,6 +179,12 @@ function Board({
     }, {})
   }, [snapshot])
 
+  useEffect(() => {
+    if (opponents.length && (!activeOpponentId || !opponents.some((opp) => opp.id === activeOpponentId))) {
+      setActiveOpponentId(opponents[0].id)
+    }
+  }, [opponents, activeOpponentId])
+
   if (!snapshot) {
     return (
       <div className={`app theme-${theme}`}>
@@ -189,8 +199,25 @@ function Board({
     )
   }
 
-  const hero = snapshot.players[0]
-  const opponents = snapshot.players.slice(1)
+  if (!hero) {
+    return (
+      <div className={`app theme-${theme}`}>
+        <header className="hero">
+          <h1>Waiting for players…</h1>
+          <p className="muted">Room {roomCode}</p>
+        </header>
+      </div>
+    )
+  }
+
+  const activeOpponent =
+    opponents.find((opponent) => opponent.id === activeOpponentId) ?? opponents[0] ?? null
+  const activeOpponentZones = activeOpponent ? groupByZone[activeOpponent.name] || {} : {}
+  const activeOpponentBattlefield = activeOpponentZones.battlefield || []
+  const activeOpponentStack = activeOpponentZones.stack || []
+  const activeOpponentYard = activeOpponentZones.graveyard || []
+  const activeOpponentExile = activeOpponentZones.exile || []
+  const activeOpponentCom = activeOpponentZones.commander?.[0]
   const heroZones = groupByZone[hero.name] || {}
   const heroBattlefield = heroZones.battlefield || []
   const heroHand = heroZones.hand || []
@@ -198,55 +225,79 @@ function Board({
   const heroYard = heroZones.graveyard || []
   const heroExile = heroZones.exile || []
 
+  const toggleZones = (opponentId: string) => {
+    setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
+  }
+
   return (
     <div className={`app theme-${theme}`}>
       <div className="board-shell">
         <main className="content">
           <section className="panel playmat">
             <div className="tabletop">
-              <div className="opponent-row">
-                {opponents.map((opponent) => {
-                  const zones = groupByZone[opponent.name] || {}
-                  const opponentBattlefield = zones.battlefield || []
-                  const opponentStack = zones.stack || []
-                  const opponentYard = zones.graveyard || []
-                  const opponentExile = zones.exile || []
-                  const commander = zones.commander?.[0]
-                  return (
-                    <div key={opponent.id} className="seat opponent">
-                      <div className="seat__life small-life" style={{ borderColor: opponent.color }}>
-                        {opponent.life}
-                        <span>life</span>
-                      </div>
-                      <div className="seat__header">
-                        <p className="player__meta">
-                          <span className="eyebrow inline">{opponent.status}</span>
-                          <span className="player__name inline">{opponent.name}</span>
-                          <span className="muted small inline">{opponent.deck}</span>
-                          <span className="muted small inline">Commander {opponent.commander}</span>
-                        </p>
-                      </div>
-                      <div className="seat__zones">
-                        <div className="pile-column">
-                          <ZonePile label="Library" count={60} variant="deck" />
-                          <ZonePile label="Commander" topCard={commander?.name} variant="commander" />
-                          <ZonePile label="Exile" topCard={opponentExile[0]?.name} variant="exile" />
-                          <ZonePile label="Graveyard" topCard={opponentYard[0]?.name} variant="yard" />
-                        </div>
-                        <div className="battlefield">
-                          <CardList cards={opponentBattlefield} />
-                          {opponentStack.length ? (
-                            <div className="stack-callout">
-                              <p className="zone__label">Stack</p>
-                              <CardList cards={opponentStack} compact />
-                            </div>
-                          ) : null}
-                        </div>
+              {activeOpponent ? (
+                <div className="opponent-view">
+                  <div className="opponent-tabs">
+                    {opponents.slice(0, 3).map((opponent) => (
+                      <button
+                        key={opponent.id}
+                        className={`opponent-tab ${activeOpponent.id === opponent.id ? 'active' : ''}`}
+                        onClick={() => setActiveOpponentId(opponent.id)}
+                        type="button"
+                      >
+                        <span className="opponent-tab__name">{opponent.name}</span>
+                        <span className="muted small">{opponent.commander}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="seat opponent compact">
+                    <div className="seat__life small-life" style={{ borderColor: activeOpponent.color }}>
+                      {activeOpponent.life}
+                      <span>life</span>
+                    </div>
+                    <div className="seat__header">
+                      <p className="player__meta">
+                        <span className="eyebrow inline">{activeOpponent.status}</span>
+                        <span className="player__name inline">{activeOpponent.name}</span>
+                        <span className="muted small inline">{activeOpponent.deck}</span>
+                        <span className="muted small inline">Commander {activeOpponent.commander}</span>
+                      </p>
+                      <button
+                        className="zones-toggle"
+                        type="button"
+                        onClick={() => toggleZones(activeOpponent.id)}
+                        aria-expanded={!!openZones[activeOpponent.id]}
+                      >
+                        Zones
+                        <span className="material-symbols-rounded rail-icon">
+                          {openZones[activeOpponent.id] ? 'expand_less' : 'expand_more'}
+                        </span>
+                      </button>
+                    </div>
+                    <div className="seat__zones single-column">
+                      <div className="battlefield">
+                        <CardList cards={activeOpponentBattlefield} />
+                        {activeOpponentStack.length ? (
+                          <div className="stack-callout">
+                            <p className="zone__label">Stack</p>
+                            <CardList cards={activeOpponentStack} compact />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
+
+                    <div className={`zone-dropdown ${openZones[activeOpponent.id] ? 'open' : ''}`}>
+                      <div className="pile-row">
+                        <ZonePile label="Library" count={60} variant="deck" />
+                        <ZonePile label="Commander" topCard={activeOpponentCom?.name} variant="commander" />
+                        <ZonePile label="Exile" topCard={activeOpponentExile[0]?.name} variant="exile" />
+                        <ZonePile label="Graveyard" topCard={activeOpponentYard[0]?.name} variant="yard" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="seat hero">
                 <div className="seat__life" style={{ borderColor: hero.color }}>
