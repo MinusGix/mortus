@@ -251,25 +251,15 @@ function Board({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
   const [openZones, setOpenZones] = useState<Record<string, boolean>>({})
-  const [deckUrl, setDeckUrl] = useState('')
+  const [recentDecks, setRecentDecks] = useState<string[]>(() => loadRecentDecks())
+  const [deckUrl, setDeckUrl] = useState(() => loadRecentDecks()[0] || '')
   const [deckLoading, setDeckLoading] = useState(false)
   const [deckError, setDeckError] = useState<string | null>(null)
   const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
-  const [recentDecks, setRecentDecks] = useState<string[]>([])
   const clientState = useClientState()
   const snapshot = clientState.snapshot
   const opponents = snapshot?.players.slice(1) ?? []
   const hero = snapshot?.players[0]
-
-  useEffect(() => {
-    setRecentDecks(loadRecentDecks())
-  }, [])
-
-  useEffect(() => {
-    if (!deckUrl && recentDecks.length) {
-      setDeckUrl(recentDecks[0])
-    }
-  }, [recentDecks, deckUrl])
 
   useEffect(() => {
     if (roomCode) {
