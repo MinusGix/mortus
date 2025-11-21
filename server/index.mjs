@@ -1,4 +1,6 @@
 import { WebSocketServer } from 'ws'
+import { createServer } from 'http'
+import MoxfieldApi from 'moxfield-api'
 import { randomBytes } from 'crypto'
 
 const PORT = process.env.PORT || 4000
@@ -86,8 +88,51 @@ const updatePending = (room, taskId) => {
   )
 }
 
-const server = new WebSocketServer({ port: PORT })
-console.log(`Websocket server on ws://localhost:${PORT}`)
+const httpServer = createServer(async (req, res) => {
+  const url = new URL(req.url || '/', `http://${req.headers.host}`)
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(200)
+    res.end()
+    return
+  }
+
+  if (req.method === 'GET' && url.pathname.startsWith('/moxfield/')) {
+    const id = url.pathname.split('/')[2]
+    if (!id) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Missing deck id' }))
+      return
+    }
+
+    try {
+      const api = new MoxfieldApi()
+      const deck = await api.deckList.findById(id)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(deck))
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          error: 'Failed to fetch from Moxfield',
+          detail: error?.message || String(error),
+        }),
+      )
+    }
+    return
+  }
+
+  res.writeHead(404)
+  res.end('not found')
+})
+
+const server = new WebSocketServer({ server: httpServer })
+httpServer.listen(PORT, () => {
+  console.log(`Websocket + proxy server on http://localhost:${PORT}`)
+})
 
 server.on('connection', (socket) => {
   let currentRoom = null

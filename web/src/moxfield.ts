@@ -1,4 +1,4 @@
-import MoxfieldApi, { type DeckListType } from 'moxfield-api'
+import type { DeckListType } from 'moxfield-api'
 
 const STORAGE_KEY = 'mortus-moxfield-cache-v1'
 const inMemoryCache: Record<string, CachedMoxfieldDeck> = {}
@@ -56,6 +56,8 @@ const normalizeId = (raw: string) => {
   }
 }
 
+const proxyBase = import.meta.env.VITE_MOXFIELD_PROXY || 'http://localhost:4000/moxfield'
+
 export async function getMoxfieldDeck(idOrUrl: string): Promise<CachedMoxfieldDeck> {
   const id = normalizeId(idOrUrl)
   const cache = loadCache()
@@ -63,8 +65,11 @@ export async function getMoxfieldDeck(idOrUrl: string): Promise<CachedMoxfieldDe
     return cache[id]
   }
 
-  const moxfield = new MoxfieldApi()
-  const decklist = (await moxfield.deckList.findById(id)) as DeckListType
+  const response = await fetch(`${proxyBase}/${id}`)
+  if (!response.ok) {
+    throw new Error(`Moxfield proxy error ${response.status}`)
+  }
+  const decklist = (await response.json()) as DeckListType
   const record: CachedMoxfieldDeck = { id, decklist, fetchedAt: Date.now() }
   saveCache({ ...cache, [id]: record })
   return record
