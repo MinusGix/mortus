@@ -161,8 +161,7 @@ function Landing({
             <p className="eyebrow">Moxfield</p>
             <h3>Load a deck once, keep it cached locally</h3>
             <p className="muted small">
-              We use <code>moxfield-api</code> to fetch the list and persist the response in your browser. If cached,
-              future loads skip touching moxfield.com.
+              Deck fetch is server-verified/cached; the browser gets a trimmed payload (name, commanders, mainboard count).
             </p>
           </div>
           <form className="moxfield-form" onSubmit={onFetchMoxfield}>
