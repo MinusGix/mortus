@@ -262,6 +262,16 @@ function Board({
   const hero = snapshot?.players[0]
 
   useEffect(() => {
+    setRecentDecks(loadRecentDecks())
+  }, [])
+
+  useEffect(() => {
+    if (!deckUrl && recentDecks.length) {
+      setDeckUrl(recentDecks[0])
+    }
+  }, [recentDecks, deckUrl])
+
+  useEffect(() => {
     if (roomCode) {
       client.joinRoom(roomCode)
     }
