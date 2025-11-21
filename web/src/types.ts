@@ -19,6 +19,14 @@ export type BoardCard = {
   zone: Zone
   tapped?: boolean
   note?: string
+  manaCost?: string | null
+  typeLine?: string | null
+  oracleText?: string | null
+  image?: string | null
+  scryfallId?: string | null
+  legalities?: Record<string, string> | null
+  colors?: string[] | null
+  order?: number
 }
 
 export type LogEntry = {

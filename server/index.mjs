@@ -174,6 +174,76 @@ const fetchMoxfield = async (idOrUrl) => {
   return { id, deck, fetchedAt: record.fetchedAt, cached: false }
 }
 
+let cardCounter = 0
+const nextCardId = (owner, name) => `c-${owner}-${name}-${++cardCounter}-${randomBytes(2).toString('hex')}`
+
+const shuffle = (arr) => {
+  const copy = [...arr]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j], copy[i]]
+  }
+  return copy
+}
+
+const buildBoardFromDeck = (deck, players) => {
+  const board = []
+
+  players.forEach((player) => {
+    const mainboard = deck.mainboard || {}
+    const commanders = deck.commanders || {}
+    const library = []
+
+    Object.values(mainboard).forEach((entry) => {
+      const qty = entry?.quantity || 1
+      for (let i = 0; i < qty; i++) {
+        const card = entry.card || {}
+        library.push({
+          id: nextCardId(player.name, card.name || 'card'),
+          name: card.name || 'Unknown card',
+          owner: player.name,
+          zone: 'library',
+          manaCost: card.manaCost || null,
+          typeLine: card.typeLine || null,
+          oracleText: card.oracleText || null,
+          image: card.image || null,
+          scryfallId: card.scryfallId || null,
+          legalities: card.legalities || null,
+          colors: card.colors || null,
+        })
+      }
+    })
+
+    const libraryShuffled = shuffle(library).map((card, idx) => ({ ...card, order: idx }))
+    const draws = libraryShuffled.splice(0, 3).map((card) => ({ ...card, zone: 'battlefield', note: card.typeLine }))
+
+    Object.values(commanders).forEach((entry) => {
+      const qty = entry?.quantity || 1
+      for (let i = 0; i < qty; i++) {
+        const card = entry.card || {}
+        board.push({
+          id: nextCardId(player.name, card.name || 'Commander'),
+          name: card.name || 'Commander',
+          owner: player.name,
+          zone: 'commander',
+          note: 'Commander',
+          manaCost: card.manaCost || null,
+          typeLine: card.typeLine || null,
+          oracleText: card.oracleText || null,
+          image: card.image || null,
+          scryfallId: card.scryfallId || null,
+          legalities: card.legalities || null,
+          colors: card.colors || null,
+        })
+      }
+    })
+
+    board.push(...draws, ...libraryShuffled)
+  })
+
+  return board
+}
+
 const httpServer = createServer((req, res) => {
   res.writeHead(404)
   res.end('not found')
@@ -229,8 +299,31 @@ server.on('connection', (socket) => {
       }
       case 'import_deck': {
         if (!currentRoom) return
-        addLog(currentRoom, 'Deck', `${name} imported deck from ${data.url || 'unknown source'}`)
-        broadcastSnapshot(currentRoom)
+        if (!data.url) {
+          addLog(currentRoom, 'Deck', `${name} tried to import a deck without a URL/id`)
+          safeSend({ type: 'error', message: 'Missing deck url or id' })
+          break
+        }
+        fetchMoxfield(data.url)
+          .then((result) => {
+            const commanders = Object.values(result.deck.commanders || {}).map((entry) => entry.card?.name).filter(Boolean)
+            currentRoom.state.players = currentRoom.state.players.map((p) => ({
+              ...p,
+              deck: result.deck.name || p.deck,
+              commander: commanders.join(' / ') || p.commander,
+            }))
+            currentRoom.state.board = buildBoardFromDeck(result.deck, currentRoom.state.players)
+            addLog(
+              currentRoom,
+              'Deck',
+              `${name} imported deck ${result.deck.name || result.id} (cached: ${result.cached ? 'yes' : 'no'})`,
+            )
+            broadcastSnapshot(currentRoom)
+          })
+          .catch((err) => {
+            addLog(currentRoom, 'Deck', `${name} failed to import deck: ${err?.message || 'Unknown error'}`)
+            safeSend({ type: 'error', message: err?.message || 'Failed to import deck' })
+          })
         break
       }
       case 'fetch_moxfield': {

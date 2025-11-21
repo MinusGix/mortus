@@ -274,12 +274,14 @@ function Board({
   const activeOpponentYard = activeOpponentZones.graveyard || []
   const activeOpponentExile = activeOpponentZones.exile || []
   const activeOpponentCom = activeOpponentZones.commander?.[0]
+  const activeOpponentLibrary = activeOpponentZones.library || []
   const heroZones = groupByZone[hero.name] || {}
   const heroBattlefield = heroZones.battlefield || []
   const heroHand = heroZones.hand || []
   const heroCom = heroZones.commander?.[0]
   const heroYard = heroZones.graveyard || []
   const heroExile = heroZones.exile || []
+  const heroLibrary = heroZones.library || []
 
   const toggleZones = (opponentId: string) => {
     setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
@@ -345,7 +347,7 @@ function Board({
 
                     <div className={`zone-dropdown ${openZones[activeOpponent.id] ? 'open' : ''}`}>
                       <div className="pile-row">
-                        <ZonePile label="Library" count={60} variant="deck" />
+                        <ZonePile label="Library" count={activeOpponentLibrary.length} variant="deck" />
                         <ZonePile label="Commander" topCard={activeOpponentCom?.name} variant="commander" />
                         <ZonePile label="Exile" topCard={activeOpponentExile[0]?.name} variant="exile" />
                         <ZonePile label="Graveyard" topCard={activeOpponentYard[0]?.name} variant="yard" />
@@ -370,7 +372,7 @@ function Board({
                 </div>
                 <div className="seat__zones">
                   <div className="pile-column">
-                    <ZonePile label="Library" count={60} variant="deck" />
+                    <ZonePile label="Library" count={heroLibrary.length} variant="deck" />
                     <ZonePile label="Commander" topCard={heroCom?.name} variant="commander" />
                     <ZonePile label="Exile" topCard={heroExile[0]?.name} variant="exile" />
                     <ZonePile label="Graveyard" topCard={heroYard[0]?.name} variant="yard" />
