@@ -164,7 +164,17 @@ const simplifyDeck = (deck) => {
 const fetchMoxfield = async (idOrUrl) => {
   const id = normalizeId(idOrUrl)
   if (moxfieldCache[id]) {
-    return { id, deck: moxfieldCache[id].deck, fetchedAt: moxfieldCache[id].fetchedAt, cached: true }
+    const entry = moxfieldCache[id]
+    if (entry.deck && entry.deck.mainboard) {
+      return { id, deck: entry.deck, fetchedAt: entry.fetchedAt, cached: true }
+    }
+    if (entry.deck && entry.deck.boards) {
+      const simplified = simplifyDeck(entry.deck)
+      const record = { deck: simplified, fetchedAt: entry.fetchedAt || Date.now() }
+      moxfieldCache[id] = record
+      saveCache()
+      return { id, deck: simplified, fetchedAt: record.fetchedAt, cached: true }
+    }
   }
   const api = new MoxfieldApi()
   const deck = await api.deckList.findById(id)

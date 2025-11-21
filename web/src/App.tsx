@@ -8,6 +8,26 @@ import { createWsClient, type ClientState } from './wsClient'
 const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
 const defaultRoom = import.meta.env.VITE_DEFAULT_ROOM || 'A1B2-CASCADE'
 const client = createWsClient(wsUrl)
+const recentDeckStorageKey = 'mortus-recent-decks'
+
+const loadRecentDecks = (): string[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(recentDeckStorageKey)
+    return raw ? (JSON.parse(raw) as string[]) : []
+  } catch {
+    return []
+  }
+}
+
+const saveRecentDecks = (decks: string[]) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(recentDeckStorageKey, JSON.stringify(decks))
+  } catch {
+    /* ignore */
+  }
+}
 
 function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: boolean }) {
   return (
@@ -75,6 +95,17 @@ function Landing({
   const [moxfieldDeck, setMoxfieldDeck] = useState<MoxfieldDeckSummary | null>(null)
   const [moxfieldError, setMoxfieldError] = useState<string | null>(null)
   const [moxfieldLoading, setMoxfieldLoading] = useState(false)
+  const [recentDecks, setRecentDecks] = useState<string[]>([])
+
+  useEffect(() => {
+    setRecentDecks(loadRecentDecks())
+  }, [])
+
+  useEffect(() => {
+    if (!moxfieldInput && recentDecks.length) {
+      setMoxfieldInput(recentDecks[0])
+    }
+  }, [recentDecks, moxfieldInput])
 
   const onJoin = (event: FormEvent) => {
     event.preventDefault()
@@ -94,6 +125,9 @@ function Landing({
       const result = await client.fetchMoxfield(moxfieldInput)
       // @ts-expect-error dynamic deck shape from server
       setMoxfieldDeck(summarizeDeck(result.deck, result.id, result.fetchedAt))
+      const updated = [moxfieldInput, ...recentDecks.filter((d) => d !== moxfieldInput)].slice(0, 5)
+      setRecentDecks(updated)
+      saveRecentDecks(updated)
     } catch (error) {
       setMoxfieldError(error instanceof Error ? error.message : 'Could not load deck')
     } finally {
@@ -175,6 +209,15 @@ function Landing({
             </button>
           </form>
           {moxfieldError ? <p className="muted small error-text">{moxfieldError}</p> : null}
+          {recentDecks.length ? (
+            <div className="chips">
+              {recentDecks.map((url) => (
+                <button key={url} type="button" className="chip" onClick={() => setMoxfieldInput(url)}>
+                  {url}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {moxfieldDeck ? (
             <div className="moxfield-result">
               <div>
@@ -212,6 +255,7 @@ function Board({
   const [deckLoading, setDeckLoading] = useState(false)
   const [deckError, setDeckError] = useState<string | null>(null)
   const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
+  const [recentDecks, setRecentDecks] = useState<string[]>([])
   const clientState = useClientState()
   const snapshot = clientState.snapshot
   const opponents = snapshot?.players.slice(1) ?? []
@@ -291,6 +335,16 @@ function Board({
     setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
   }
 
+  useEffect(() => {
+    setRecentDecks(loadRecentDecks())
+  }, [])
+
+  useEffect(() => {
+    if (!deckUrl && recentDecks.length) {
+      setDeckUrl(recentDecks[0])
+    }
+  }, [recentDecks, deckUrl])
+
   const onImportDeck = async (event: FormEvent) => {
     event.preventDefault()
     setDeckError(null)
@@ -300,6 +354,9 @@ function Board({
       // @ts-expect-error dynamic deck shape from server
       setDeckSummary(summarizeDeck(result.deck, result.id, result.fetchedAt))
       await client.importDeck(deckUrl)
+      const updated = [deckUrl, ...recentDecks.filter((d) => d !== deckUrl)].slice(0, 5)
+      setRecentDecks(updated)
+      saveRecentDecks(updated)
     } catch (error) {
       setDeckError(error instanceof Error ? error.message : 'Failed to import deck')
     } finally {
@@ -439,11 +496,11 @@ function Board({
               <p className="muted small">Seed {snapshot.seed}</p>
             </div>
 
-            <div className="side-drawer__section">
-              <div className="side-drawer__section-header">
-                <p className="eyebrow">Settings</p>
-              </div>
-              <div className="chips">
+              <div className="side-drawer__section">
+                <div className="side-drawer__section-header">
+                  <p className="eyebrow">Settings</p>
+                </div>
+                <div className="chips">
                 <span className="chip">Stub cards</span>
                 <span className="chip">Commander ready</span>
               </div>
@@ -480,6 +537,13 @@ function Board({
                   {deckSummary.commanders.length ? `Commander: ${deckSummary.commanders.join(', ')}` : 'No commanders'}
                 </p>
               ) : null}
+              <div className="chips">
+                {recentDecks.map((url) => (
+                  <button key={url} type="button" className="chip" onClick={() => setDeckUrl(url)}>
+                    {url}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="side-drawer__section chat-panel">
