@@ -2,7 +2,7 @@ import './App.css'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { type BoardCard } from './types'
-import { getMoxfieldDeck, summarizeDeck, type MoxfieldDeckSummary } from './moxfield'
+import { summarizeDeck, type MoxfieldDeckSummary } from './moxfield'
 import { createWsClient, type ClientState } from './wsClient'
 
 const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
@@ -91,8 +91,9 @@ function Landing({
     setMoxfieldError(null)
     setMoxfieldLoading(true)
     try {
-      const { decklist, id, fetchedAt } = await getMoxfieldDeck(moxfieldInput)
-      setMoxfieldDeck(summarizeDeck(decklist, id, fetchedAt))
+      const result = await client.fetchMoxfield(moxfieldInput)
+      // @ts-expect-error dynamic deck shape from server
+      setMoxfieldDeck(summarizeDeck(result.deck, result.id, result.fetchedAt))
     } catch (error) {
       setMoxfieldError(error instanceof Error ? error.message : 'Could not load deck')
     } finally {

@@ -1,5 +1,6 @@
 import { WebSocketServer } from 'ws'
 import { createServer } from 'http'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import MoxfieldApi from 'moxfield-api'
 import { randomBytes } from 'crypto'
 
@@ -88,43 +89,54 @@ const updatePending = (room, taskId) => {
   )
 }
 
-const httpServer = createServer(async (req, res) => {
-  const url = new URL(req.url || '/', `http://${req.headers.host}`)
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-  if (req.method === 'OPTIONS') {
-    res.writeHead(200)
-    res.end()
-    return
+const cachePath = new URL('./moxfield-cache.json', import.meta.url)
+const loadCache = () => {
+  if (!existsSync(cachePath)) return {}
+  try {
+    return JSON.parse(readFileSync(cachePath, 'utf8'))
+  } catch {
+    return {}
   }
+}
 
-  if (req.method === 'GET' && url.pathname.startsWith('/moxfield/')) {
-    const id = url.pathname.split('/')[2]
-    if (!id) {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: 'Missing deck id' }))
-      return
-    }
+let moxfieldCache = loadCache()
 
-    try {
-      const api = new MoxfieldApi()
-      const deck = await api.deckList.findById(id)
-      res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(deck))
-    } catch (error) {
-      res.writeHead(500, { 'Content-Type': 'application/json' })
-      res.end(
-        JSON.stringify({
-          error: 'Failed to fetch from Moxfield',
-          detail: error?.message || String(error),
-        }),
-      )
-    }
-    return
+const saveCache = () => {
+  try {
+    writeFileSync(cachePath, JSON.stringify(moxfieldCache, null, 2))
+  } catch (err) {
+    console.error('Failed to persist moxfield cache', err)
   }
+}
 
+const normalizeId = (raw) => {
+  const trimmed = String(raw || '').trim()
+  if (!trimmed) throw new Error('Missing deck id')
+  try {
+    const url = new URL(trimmed)
+    const parts = url.pathname.split('/').filter(Boolean)
+    const deckIdx = parts.findIndex((p) => p === 'decks')
+    if (deckIdx >= 0 && parts[deckIdx + 1]) return parts[deckIdx + 1]
+    return parts.pop() || trimmed
+  } catch {
+    return trimmed
+  }
+}
+
+const fetchMoxfield = async (idOrUrl) => {
+  const id = normalizeId(idOrUrl)
+  if (moxfieldCache[id]) {
+    return { id, deck: moxfieldCache[id].deck, fetchedAt: moxfieldCache[id].fetchedAt, cached: true }
+  }
+  const api = new MoxfieldApi()
+  const deck = await api.deckList.findById(id)
+  const record = { deck, fetchedAt: Date.now() }
+  moxfieldCache[id] = record
+  saveCache()
+  return { id, deck, fetchedAt: record.fetchedAt, cached: false }
+}
+
+const httpServer = createServer((req, res) => {
   res.writeHead(404)
   res.end('not found')
 })
@@ -181,6 +193,18 @@ server.on('connection', (socket) => {
         if (!currentRoom) return
         addLog(currentRoom, 'Deck', `${name} imported deck from ${data.url || 'unknown source'}`)
         broadcastSnapshot(currentRoom)
+        break
+      }
+      case 'fetch_moxfield': {
+        const { url, requestId } = data
+        const sendResult = (payload) => safeSend({ type: 'moxfield_result', requestId, ...payload })
+        if (!url) {
+          sendResult({ error: 'Missing deck url or id' })
+          break
+        }
+        fetchMoxfield(url)
+          .then((result) => sendResult(result))
+          .catch((err) => sendResult({ error: err?.message || 'Failed to load deck' }))
         break
       }
       case 'update_status': {

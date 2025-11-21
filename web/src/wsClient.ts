@@ -15,6 +15,11 @@ export const createWsClient = (url: string) => {
   let ws: WebSocket | null = null
   let listeners: Array<(state: ClientState) => void> = []
   let createResolvers: Array<(room: string) => void> = []
+  let requestId = 0
+  const pendingMoxfield = new Map<
+    string,
+    (result: { id: string; deck: unknown; fetchedAt: number; cached: boolean; error?: string }) => void
+  >()
 
   let state: ClientState = {
     status: 'closed',
@@ -62,6 +67,14 @@ export const createWsClient = (url: string) => {
           createResolvers.forEach((resolve) => resolve(data.room))
           createResolvers = []
           return
+        case 'moxfield_result': {
+          const resolver = pendingMoxfield.get(data.requestId)
+          if (resolver) {
+            resolver(data)
+            pendingMoxfield.delete(data.requestId)
+          }
+          return
+        }
         case 'error':
           setState({ lastError: data.message })
           return
@@ -121,6 +134,25 @@ export const createWsClient = (url: string) => {
     },
     async simulateAction(label: string, detail: string) {
       await send({ type: 'simulate_action', label, detail })
+    },
+    async fetchMoxfield(url: string) {
+      const id = `mox-${++requestId}-${Date.now()}`
+      await send({ type: 'fetch_moxfield', url, requestId: id })
+      return new Promise<{
+        id: string
+        deck: unknown
+        fetchedAt: number
+        cached: boolean
+        error?: string
+      }>((resolve, reject) => {
+        pendingMoxfield.set(id, (result) => {
+          if (result?.error) {
+            reject(new Error(result.error))
+          } else {
+            resolve(result)
+          }
+        })
+      })
     },
     getState: () => state,
   }
