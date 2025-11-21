@@ -126,13 +126,14 @@ const normalizeId = (raw) => {
 const simplifyCard = (card) => {
   if (!card) return null
   const print = card.print || card.card || card
+  const scryfallId = print.scryfallId ?? print.scryfall_id ?? card.scryfallId ?? card.scryfall_id ?? null
   return {
     name: print.name,
     manaCost: print.manaCost || print.mana_cost || card.manaCost || null,
     typeLine: print.typeLine || print.type_line || card.typeLine || null,
     oracleText: print.oracleText || print.oracle_text || card.oracleText || null,
     image: print.image || print.image_uris?.normal || print.image_uris?.large || null,
-    scryfallId: print.scryfallId || print.scryfall_id || print.scryfallId ?? null,
+    scryfallId,
     legalities: print.legalities || card.legalities || null,
     colors: print.color_identity || print.colors || card.colors || null,
   }
