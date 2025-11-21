@@ -174,6 +174,10 @@ button.ghost {
   gap: 0.75rem;
 }
 
+.moxfield-form.sidebar {
+  grid-template-columns: 1fr;
+}
+
 .moxfield-result {
   display: flex;
   justify-content: space-between;

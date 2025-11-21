@@ -208,6 +208,10 @@ function Board({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
   const [openZones, setOpenZones] = useState<Record<string, boolean>>({})
+  const [deckUrl, setDeckUrl] = useState('')
+  const [deckLoading, setDeckLoading] = useState(false)
+  const [deckError, setDeckError] = useState<string | null>(null)
+  const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
   const clientState = useClientState()
   const snapshot = clientState.snapshot
   const opponents = snapshot?.players.slice(1) ?? []
@@ -285,6 +289,22 @@ function Board({
 
   const toggleZones = (opponentId: string) => {
     setOpenZones((prev) => ({ ...prev, [opponentId]: !prev[opponentId] }))
+  }
+
+  const onImportDeck = async (event: FormEvent) => {
+    event.preventDefault()
+    setDeckError(null)
+    setDeckLoading(true)
+    try {
+      const result = await client.fetchMoxfield(deckUrl)
+      // @ts-expect-error dynamic deck shape from server
+      setDeckSummary(summarizeDeck(result.deck, result.id, result.fetchedAt))
+      await client.importDeck(deckUrl)
+    } catch (error) {
+      setDeckError(error instanceof Error ? error.message : 'Failed to import deck')
+    } finally {
+      setDeckLoading(false)
+    }
   }
 
   return (
@@ -442,6 +462,24 @@ function Board({
                   ))}
                 </div>
               </div>
+
+              <form className="moxfield-form sidebar" onSubmit={onImportDeck}>
+                <input
+                  value={deckUrl}
+                  onChange={(e) => setDeckUrl(e.target.value)}
+                  placeholder="Moxfield deck URL or id"
+                />
+                <button type="submit" disabled={deckLoading}>
+                  {deckLoading ? 'Importing…' : 'Import deck to table'}
+                </button>
+              </form>
+              {deckError ? <p className="muted small error-text">{deckError}</p> : null}
+              {deckSummary ? (
+                <p className="muted small">
+                  Loaded {deckSummary.name} · {deckSummary.mainboardCount} cards ·{' '}
+                  {deckSummary.commanders.length ? `Commander: ${deckSummary.commanders.join(', ')}` : 'No commanders'}
+                </p>
+              ) : null}
             </div>
 
             <div className="side-drawer__section chat-panel">
