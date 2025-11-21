@@ -12,6 +12,7 @@
   "dependencies": {
     "@fontsource-variable/manrope": "^5.2.8",
     "@fontsource/material-symbols-rounded": "^5.2.29",
+    "moxfield-api": "^1.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^6.30.2"

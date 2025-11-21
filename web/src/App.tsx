@@ -2,6 +2,7 @@ import './App.css'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import { type BoardCard } from './types'
+import { getMoxfieldDeck, summarizeDeck, type MoxfieldDeckSummary } from './moxfield'
 import { createWsClient, type ClientState } from './wsClient'
 
 const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
@@ -70,6 +71,10 @@ function Landing({
 }) {
   const navigate = useNavigate()
   const [roomInput, setRoomInput] = useState(defaultRoom)
+  const [moxfieldInput, setMoxfieldInput] = useState('')
+  const [moxfieldDeck, setMoxfieldDeck] = useState<MoxfieldDeckSummary | null>(null)
+  const [moxfieldError, setMoxfieldError] = useState<string | null>(null)
+  const [moxfieldLoading, setMoxfieldLoading] = useState(false)
 
   const onJoin = (event: FormEvent) => {
     event.preventDefault()
@@ -79,6 +84,20 @@ function Landing({
   const onCreate = async () => {
     const code = await client.createRoom()
     navigate(`/room/${encodeURIComponent(code)}`)
+  }
+
+  const onFetchMoxfield = async (event: FormEvent) => {
+    event.preventDefault()
+    setMoxfieldError(null)
+    setMoxfieldLoading(true)
+    try {
+      const { decklist, id, fetchedAt } = await getMoxfieldDeck(moxfieldInput)
+      setMoxfieldDeck(summarizeDeck(decklist, id, fetchedAt))
+    } catch (error) {
+      setMoxfieldError(error instanceof Error ? error.message : 'Could not load deck')
+    } finally {
+      setMoxfieldLoading(false)
+    }
   }
 
   return (
@@ -134,6 +153,43 @@ function Landing({
           <div className="fact">Authoritative server owns all randomness; clients send intent only.</div>
           <div className="fact">Deck hashes are stored so opponents can re-verify mid-game.</div>
           <div className="fact">Replays store actions + resolved effects to survive code changes.</div>
+        </div>
+
+        <div className="moxfield-card">
+          <div>
+            <p className="eyebrow">Moxfield</p>
+            <h3>Load a deck once, keep it cached locally</h3>
+            <p className="muted small">
+              We use <code>moxfield-api</code> to fetch the list and persist the response in your browser. If cached,
+              future loads skip touching moxfield.com.
+            </p>
+          </div>
+          <form className="moxfield-form" onSubmit={onFetchMoxfield}>
+            <input
+              value={moxfieldInput}
+              onChange={(e) => setMoxfieldInput(e.target.value)}
+              placeholder="Paste a Moxfield deck URL or id (e.g. oEWXWHM5eEGMmopExLWRCA)"
+            />
+            <button type="submit" disabled={moxfieldLoading} className="primary">
+              {moxfieldLoading ? 'Loading…' : 'Fetch & cache deck'}
+            </button>
+          </form>
+          {moxfieldError ? <p className="muted small error-text">{moxfieldError}</p> : null}
+          {moxfieldDeck ? (
+            <div className="moxfield-result">
+              <div>
+                <p className="muted small">Deck id {moxfieldDeck.id}</p>
+                <p className="moxfield-name">{moxfieldDeck.name}</p>
+                <p className="muted small">
+                  {moxfieldDeck.commanders.length ? `Commander: ${moxfieldDeck.commanders.join(', ')}` : 'Commander not set'}
+                </p>
+              </div>
+              <div className="moxfield-meta">
+                <span className="badge">{moxfieldDeck.mainboardCount} mainboard cards</span>
+                <span className="badge ghost">Cached now · persists in localStorage</span>
+              </div>
+            </div>
+          ) : null}
         </div>
       </header>
     </div>
