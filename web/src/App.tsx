@@ -5,9 +5,11 @@ import { type BoardCard } from './types'
 import { summarizeDeck, type MoxfieldDeckSummary } from './moxfield'
 import { createWsClient, type ClientState } from './wsClient'
 
+import cardBackUrl from './assets/card-back.svg'
+
 const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:4000'
 const defaultRoom = import.meta.env.VITE_DEFAULT_ROOM || 'A1B2-CASCADE'
-const defaultCardBack = import.meta.env.VITE_CARD_BACK_URL || 'https://cards.scryfall.io/normal/back/5/3/532746e2-f822-4920-ab31-94e0c8baaa84.jpg'
+const defaultCardBack = import.meta.env.VITE_CARD_BACK_URL || cardBackUrl
 const client = createWsClient(wsUrl)
 const recentDeckStorageKey = 'mortus-recent-decks'
 
@@ -37,7 +39,7 @@ function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: bo
         <div key={card.id} className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}>
           {card.image || card.backImage ? (
             <>
-              <img className="card__image" src={card.image || card.backImage || defaultCardBack} alt={card.name} />
+              <img className="card__image" src={card.image || defaultCardBack} alt={card.name} />
               <div className="card__vignette" />
             </>
           ) : null}
@@ -64,25 +66,27 @@ function ZonePile({
   topCard?: BoardCard
   variant?: 'deck' | 'yard' | 'exile' | 'commander'
 }) {
-  const topImage = topCard?.image || topCard?.backImage || (variant === 'deck' && count ? defaultCardBack : null)
+  const topImage = topCard?.image || (topCard?.backImage ? defaultCardBack : null) || (variant === 'deck' && count ? defaultCardBack : null)
   return (
     <div className={`zone-pile ${variant}`}>
       <div className="pile-visual">
         <div className="layer layer-1" />
         <div className="layer layer-2" />
         <div className="layer layer-3" />
-        <div className="pile-face">
-          <span className="pile-label">{label}</span>
           {topImage ? (
-            <div className="pile-thumb">
-              <img src={topImage} alt={topCard?.name || label} />
-              <span className="pile-thumb__caption">{topCard.name}</span>
-            </div>
-          ) : topCard ? (
-            <span className="pile-card">{topCard.name}</span>
+            <>
+              <img className="pile-bg-image" src={topImage} alt={topCard?.name || label} />
+              <div className="pile-vignette" />
+            </>
           ) : null}
-          {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
-        </div>
+          <div className="pile-content">
+            <span className="pile-label">{label}</span>
+            {topCard && !topImage ? <span className="pile-card">{topCard.name}</span> : null}
+            {topCard && topImage && variant !== 'deck' ? (
+              <span className="pile-card-name-overlay">{topCard.name}</span>
+            ) : null}
+            {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
+          </div>
       </div>
     </div>
   )

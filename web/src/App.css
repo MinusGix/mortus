@@ -729,10 +729,33 @@ button.ghost {
   border-radius: 12px;
   background: linear-gradient(145deg, rgba(255, 255, 240, 0.08), rgba(255, 255, 240, 0.02));
   border: 1px solid var(--stroke-strong);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.pile-bg-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.pile-vignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.6) 100%);
+  z-index: 1;
+}
+
+.pile-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
   display: grid;
   padding: 0.6rem;
   align-content: space-between;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
 .zone-pile.deck .pile-face {
@@ -762,27 +785,14 @@ button.ghost {
   font-weight: 700;
 }
 
-.pile-thumb {
-  position: relative;
-  border-radius: 9px;
-  overflow: hidden;
-  border: 1px solid var(--stroke);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
-}
-
-.pile-thumb img {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  display: block;
-}
-
-.pile-thumb__caption {
-  display: block;
-  padding: 0.25rem 0.4rem;
-  background: rgba(0, 0, 0, 0.5);
+.pile-card-name-overlay {
+  background: rgba(0, 0, 0, 0.6);
   color: #f8f8f8;
+  padding: 0.25rem 0.4rem;
+  border-radius: 4px;
   font-size: 0.85rem;
+  justify-self: start;
+  backdrop-filter: blur(4px);
 }
 
 .commander-zone {
