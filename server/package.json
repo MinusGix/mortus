@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "start": "node index.mjs",
-    "dev": "node index.mjs"
+    "start": "node --env-file=../.env index.mjs",
+    "dev": "node --env-file=../.env index.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.86.0",
     "moxfield-api": "^1.0.1",
     "ws": "^8.18.0"
   }

@@ -3,6 +3,7 @@ import { createServer } from 'http'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import MoxfieldApi from 'moxfield-api'
 import { randomBytes } from 'crypto'
+import { supabase } from './db.mjs'
 
 const PORT = process.env.PORT || 4000
 const rooms = new Map()
@@ -333,7 +334,7 @@ server.on('connection', (socket) => {
     }
   }
 
-  socket.on('message', (raw) => {
+  socket.on('message', async (raw) => {
     let data
     try {
       data = JSON.parse(raw.toString())
@@ -433,6 +434,34 @@ server.on('connection', (socket) => {
         if (!currentRoom) return
         addLog(currentRoom, data.label || 'Action', data.detail || 'No detail')
         broadcastSnapshot(currentRoom)
+        break
+      }
+      case 'game_over': {
+        if (!currentRoom) return
+        const { winner } = data
+        addLog(currentRoom, 'Game Over', `Winner: ${winner}`)
+        broadcastSnapshot(currentRoom)
+
+        if (supabase) {
+          const { error } = await supabase
+            .from('game_replays')
+            .insert({
+              room_code: currentRoom.code,
+              winner,
+              log: currentRoom.state.log,
+              final_state: currentRoom.state
+            })
+          
+          if (error) {
+            console.error('Error saving replay:', error)
+            safeSend({ type: 'error', message: 'Failed to save replay' })
+          } else {
+            console.log('Replay saved successfully')
+            safeSend({ type: 'notification', message: 'Replay saved!' })
+          }
+        } else {
+            console.log('Supabase not configured, skipping replay save')
+        }
         break
       }
       default:
