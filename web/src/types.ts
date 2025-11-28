@@ -8,6 +8,7 @@ export type PlayerSummary = {
   status: PlayerStatus
   commander: string
   color: string
+  handCount?: number
 }
 
 export type Zone = 'battlefield' | 'stack' | 'hand' | 'graveyard' | 'exile' | 'library' | 'commander'

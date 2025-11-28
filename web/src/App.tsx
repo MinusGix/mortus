@@ -282,7 +282,6 @@ function Board({
   setTheme: (t: 'vintage' | 'modern') => void
 }) {
   const { roomCode } = useParams<{ roomCode: string }>()
-  const [handOpen, setHandOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeOpponentId, setActiveOpponentId] = useState<string | null>(null)
   const [openZones, setOpenZones] = useState<Record<string, boolean>>({})
@@ -291,6 +290,7 @@ function Board({
   const [deckLoading, setDeckLoading] = useState(false)
   const [deckError, setDeckError] = useState<string | null>(null)
   const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
+  const [handStyle, setHandStyle] = useState<'fan' | 'flat'>('fan')
   const clientState = useClientState()
   const snapshot = clientState.snapshot
   const opponents = snapshot?.players.slice(1) ?? []
@@ -432,6 +432,10 @@ function Board({
                       {activeOpponent.life}
                       <span>life</span>
                     </div>
+                    <div className="seat__hand small-hand" style={{ borderColor: activeOpponent.color }}>
+                      {activeOpponent.handCount ?? 0}
+                      <span>hand</span>
+                    </div>
                     <div className="seat__header">
                       <p className="player__meta">
                         <span className="eyebrow inline">{activeOpponent.status}</span>
@@ -507,23 +511,57 @@ function Board({
               </div>
             </div>
 
-            <div
-              className={`hand-drawer ${handOpen ? 'open' : ''}`}
-              onMouseEnter={() => setHandOpen(true)}
-              onMouseLeave={() => setHandOpen(false)}
-            >
-              <div className="hand-header">
-                <span>Hand</span>
-                <span className="muted small">{heroHand.length} cards</span>
-              </div>
+            <div className="hand-drawer">
               <div className="hand-cards">
-                {heroHand.map((card, idx) => (
-                  <div key={card.id} className="card hand-card" style={{ transform: `translateX(-${idx * 16}px)` }}>
-                    <p className="card__title">{card.name}</p>
-                    <p className="card__note">Hand</p>
-                  </div>
-                ))}
-                {!heroHand.length ? <p className="muted">No cards in hand</p> : null}
+                {heroHand.map((card, idx) => {
+                  const total = heroHand.length
+                  const center = (total - 1) / 2
+                  
+                  let rotate = 0
+                  let translateX = 0
+                  let translateY = 0
+
+                  if (handStyle === 'fan') {
+                    // Dynamic spread: tighter for few cards, wider for many, capped at max width
+                    const maxTotalAngle = 140
+                    const spreadAngle = Math.min(10, maxTotalAngle / Math.max(1, total - 1))
+                    
+                    rotate = (idx - center) * spreadAngle
+                    translateX = (idx - center) * 35 // spread out horizontally
+                    translateY = Math.abs(idx - center) * 12 // stronger arch for larger cards
+                  } else {
+                    // Flat style
+                    rotate = 0
+                    translateX = (idx - center) * 140 // 220px width - 80px overlap
+                    translateY = 0
+                  }
+                  
+                  return (
+                    <div
+                      key={card.id}
+                      className="card hand-card"
+                      style={{
+                        // @ts-expect-error css variables
+                        '--rotate': `${rotate}deg`,
+                        '--x': `${translateX}px`,
+                        '--y': `${translateY}px`,
+                        zIndex: idx,
+                      }}
+                    >
+                      {card.image || card.backImage ? (
+                        <>
+                          <img className="card__image" src={card.image || defaultCardBack} alt={card.name} />
+                          <div className="card__vignette" />
+                        </>
+                      ) : (
+                        <div className="card__content">
+                          <p className="card__title">{card.name}</p>
+                          <p className="card__note">Hand</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </section>
@@ -565,6 +603,21 @@ function Board({
                   ))}
                 </div>
               </div>
+              <div className="theme-toggle compact" style={{ marginTop: '0.5rem' }}>
+                <span>Hand Style</span>
+                <div className="toggle-switch" role="group" aria-label="Choose hand style">
+                  {(['fan', 'flat'] as const).map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className={option === handStyle ? 'active' : ''}
+                      onClick={() => setHandStyle(option)}
+                    >
+                      {option === 'fan' ? 'Fan' : 'Flat'}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <form className="moxfield-form sidebar" onSubmit={onImportDeck}>
                 <input
@@ -586,7 +639,7 @@ function Board({
               <div className="chips">
                 {recentDecks.map((url) => (
                   <button key={url} type="button" className="chip" onClick={() => setDeckUrl(url)}>
-                    {url}
+                    {url.replace('https://moxfield.com/decks/', '')}
                   </button>
                 ))}
               </div>

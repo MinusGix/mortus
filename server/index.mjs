@@ -74,9 +74,52 @@ const getRoom = (code) => {
 }
 
 const broadcastSnapshot = (room) => {
-  const payload = JSON.stringify({ type: 'snapshot', room: room.code, state: room.state })
+  // Calculate hand counts globally first
+  const handCounts = room.state.players.reduce((acc, p) => {
+    const count = room.state.board.filter((c) => c.zone === 'hand' && c.owner === p.name).length
+    acc[p.id] = count
+    return acc
+  }, {})
+
   room.clients.forEach((client) => {
-    if (client.readyState === client.OPEN) client.send(payload)
+    if (client.readyState !== client.OPEN) return
+
+    // Clone state to avoid mutating the source of truth
+    const snapshot = { ...room.state }
+    
+    // 1. Filter Board: Remove cards in hand that don't belong to the viewer
+    // If client has no playerId (spectator), they see NO hands (or maybe all? let's say none for privacy)
+    const viewerId = client.playerId
+    const viewerName = room.state.players.find((p) => p.id === viewerId)?.name
+
+    snapshot.board = snapshot.board.filter((card) => {
+      if (card.zone !== 'hand') return true
+      // Only show hand cards if they belong to the viewer
+      return card.owner === viewerName
+    })
+
+    // 2. Enrich Players: Add handCount and Rotate
+    // We want the viewer to be at index 0 (Hero)
+    const playersWithCounts = snapshot.players.map((p) => ({
+      ...p,
+      handCount: handCounts[p.id] || 0,
+    }))
+
+    let sortedPlayers = playersWithCounts
+    if (viewerId) {
+      const idx = playersWithCounts.findIndex((p) => p.id === viewerId)
+      if (idx > -1) {
+        // Rotate so viewer is first: [viewer, ...others, ...beforeViewer]
+        // Actually, simple rotation:
+        const before = playersWithCounts.slice(0, idx)
+        const after = playersWithCounts.slice(idx)
+        sortedPlayers = [...after, ...before]
+      }
+    }
+
+    snapshot.players = sortedPlayers
+
+    client.send(JSON.stringify({ type: 'snapshot', room: room.code, state: snapshot }))
   })
 }
 
@@ -284,7 +327,7 @@ const buildBoardFromDeck = (deck, players) => {
     })
 
     const libraryShuffled = shuffle(library).map((card, idx) => ({ ...card, order: idx }))
-    const draws = libraryShuffled.splice(0, 3).map((card) => ({ ...card, zone: 'battlefield', note: card.typeLine }))
+    const draws = libraryShuffled.splice(0, 7).map((card) => ({ ...card, zone: 'hand', note: 'Hand' }))
 
     Object.values(commanders).forEach((entry) => {
       const qty = entry?.quantity || 1
@@ -353,7 +396,39 @@ server.on('connection', (socket) => {
         name = playerName || name
         currentRoom = getRoom(roomCode)
         currentRoom.clients.add(socket)
-        addLog(currentRoom, 'Join', `${name} joined room ${roomCode}`)
+
+        // Assign Player ID
+        // Simple logic: First available slot
+        const takenIds = new Set()
+        currentRoom.clients.forEach(c => {
+          if (c.playerId) takenIds.add(c.playerId)
+        })
+
+        if (!takenIds.has('p1')) {
+          socket.playerId = 'p1'
+        } else if (!takenIds.has('p2')) {
+          socket.playerId = 'p2'
+        } else {
+          socket.playerId = null // Spectator
+        }
+
+        // Update player name if assigned
+        if (socket.playerId) {
+          const oldName = currentRoom.state.players.find(p => p.id === socket.playerId)?.name
+          
+          currentRoom.state.players = currentRoom.state.players.map(p => 
+            p.id === socket.playerId ? { ...p, name: name } : p
+          )
+
+          // Update card ownership if name changed
+          if (oldName && oldName !== name) {
+            currentRoom.state.board = currentRoom.state.board.map(card => 
+              card.owner === oldName ? { ...card, owner: name } : card
+            )
+          }
+        }
+
+        addLog(currentRoom, 'Join', `${name} joined room ${roomCode} as ${socket.playerId || 'Spectator'}`)
         broadcastSnapshot(currentRoom)
         break
       }
@@ -362,6 +437,10 @@ server.on('connection', (socket) => {
         const room = getRoom(code)
         room.state = createRoomState(code)
         room.clients.add(socket)
+        
+        // Creator is always p1
+        socket.playerId = 'p1'
+        
         currentRoom = room
         safeSend({ type: 'room_created', room: code })
         broadcastSnapshot(room)
@@ -374,15 +453,35 @@ server.on('connection', (socket) => {
           safeSend({ type: 'error', message: 'Missing deck url or id' })
           break
         }
+        
+        const playerId = socket.playerId
+        if (!playerId) {
+           safeSend({ type: 'error', message: 'You are not a player' })
+           break
+        }
+
         fetchMoxfield(data.url)
           .then((result) => {
             const commanders = Object.values(result.deck.commanders || {}).map((entry) => entry.card?.name).filter(Boolean)
-            currentRoom.state.players = currentRoom.state.players.map((p) => ({
-              ...p,
-              deck: result.deck.name || p.deck,
-              commander: commanders.join(' / ') || p.commander,
-            }))
-            currentRoom.state.board = buildBoardFromDeck(result.deck, currentRoom.state.players)
+            
+            // Update player metadata
+            currentRoom.state.players = currentRoom.state.players.map((p) => 
+              p.id === playerId ? {
+                ...p,
+                deck: result.deck.name || p.deck,
+                commander: commanders.join(' / ') || p.commander,
+              } : p
+            )
+
+            const player = currentRoom.state.players.find(p => p.id === playerId)
+
+            // Remove existing cards owned by this player
+            currentRoom.state.board = currentRoom.state.board.filter(c => c.owner !== player.name)
+
+            // Build new cards ONLY for this player
+            const newCards = buildBoardFromDeck(result.deck, [player])
+            currentRoom.state.board.push(...newCards)
+
             addLog(
               currentRoom,
               'Deck',

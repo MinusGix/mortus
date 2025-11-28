@@ -1,3 +1,7 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 .app {
   min-height: 100vh;
   display: flex;
@@ -246,7 +250,7 @@ button.ghost {
   opacity: 0;
   transition: transform 0.25s ease, opacity 0.25s ease;
   overflow: hidden;
-  z-index: 30;
+  z-index: 200;
   pointer-events: none;
 }
 
@@ -432,6 +436,8 @@ button.ghost {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
   font-size: 0.95rem;
+  word-break: break-word;
+  max-width: 100%;
 }
 
 .chip.ghost-chip {
@@ -584,6 +590,36 @@ button.ghost {
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+}
+
+.seat__hand {
+  position: absolute;
+  top: 10px;
+  right: 94px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.25);
+  min-width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--stroke);
+  font-weight: 700;
+  font-size: 1.2rem;
+  color: var(--text-primary);
+}
+
+.seat__hand.small-hand {
+  width: 54px;
+  height: 54px;
+  font-size: 1rem;
+}
+
+.seat__hand span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
 .seat__zones.single-column {
@@ -827,49 +863,72 @@ button.ghost {
 }
 
 .hand-drawer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -14rem;
-  border: 1px solid var(--stroke);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.5));
-  border-radius: 14px 14px 0 0;
-  padding: 0.75rem 1rem 1.5rem;
-  transition: transform 0.25s ease;
-  transform: translateY(9rem);
-  box-shadow: 0 -12px 24px rgba(0, 0, 0, 0.22);
-}
-
-.hand-drawer.open {
-  transform: translateY(0);
+  position: fixed;
+  left: 50%;
+  bottom: -40px;
+  transform: translateX(-50%);
+  width: auto;
+  min-width: 600px;
+  max-width: 90vw;
+  height: 320px;
+  z-index: 100;
+  pointer-events: none; /* Let clicks pass through empty space */
 }
 
 .hand-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
+  display: none;
 }
 
 .hand-cards {
-  display: flex;
-  gap: 0.4rem;
   position: relative;
-  min-height: 180px;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  pointer-events: auto;
 }
 
 .hand-card {
-  position: relative;
-  width: 120px;
-  height: 168px;
-  background: linear-gradient(160deg, rgba(255, 255, 240, 0.1), rgba(255, 255, 240, 0.04));
+  position: absolute;
+  width: 220px;
+  height: 308px;
+  background: var(--card);
   border: 1px solid var(--stroke-strong);
-  border-radius: 12px;
-  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.26);
+  border-radius: 14px;
+  box-shadow: -8px 0 14px rgba(0, 0, 0, 0.4);
+  transform-origin: 50% 120%;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0.2, 1), z-index 0s;
+  will-change: transform;
+  bottom: 0;
 }
 
-.hand-card:not(:first-child) {
-  margin-left: -70px;
+.hand-card:hover {
+  z-index: 100 !important;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  /* We'll handle the lift in the transform style in JS or here? 
+     Actually, if we use inline styles for transform, CSS hover transform might conflict or need !important.
+     Better to use a specific class or rely on the JS to not set hover transform?
+     Wait, if I set transform in JS, CSS :hover transform will override it IF it has higher specificity or is !important.
+     But I want to KEEP the rotation and just change Y.
+     CSS cannot easily "add" to an inline transform.
+     
+     Strategy: Use a wrapper for rotation, and the inner card for hover lift?
+     OR: Just let the JS handle the base transform, and maybe use a CSS variable?
+     
+     Let's try using a CSS variable for the rotation/translation base!
+  */
+  --lift: -140px;
+  transform: translateX(var(--x)) rotate(var(--rotate)) translateY(calc(var(--y) + var(--lift, 0px))) scale(1.1);
+}
+
+.hand-card {
+  /* Default values */
+  --rotate: 0deg;
+  --x: 0px;
+  --y: 0px;
+  --lift: 0px;
+  transform: translateX(var(--x)) rotate(var(--rotate)) translateY(var(--y));
 }
 
 .log {
