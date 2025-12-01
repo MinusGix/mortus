@@ -4,6 +4,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs'
 import MoxfieldApi from 'moxfield-api'
 import { randomBytes } from 'crypto'
 import { supabase } from './db.mjs'
+import { Game } from './engine/game.mjs'
+import { ActionTypes } from './engine/types.mjs'
 
 const PORT = process.env.PORT || 4000
 const rooms = new Map()
@@ -58,25 +60,29 @@ const basePending = () => [
   { id: 'cache', text: 'Cache Scryfall image batch' },
 ]
 
-const createRoomState = (seed = makeSeed()) => ({
-  seed,
-  players: basePlayers(),
-  board: baseBoard(),
-  log: [{ label: 'Seed', detail: `Game seed locked (${seed}) for determinism`, timestamp: now() }],
-  pending: basePending(),
-})
+const createRoomGame = (seed = makeSeed()) => {
+  const initialState = {
+    seed,
+    players: basePlayers(),
+    board: baseBoard(),
+    log: [{ label: 'Seed', detail: `Game seed locked (${seed}) for determinism`, timestamp: now() }],
+    pending: basePending(),
+  }
+  return new Game(initialState)
+}
 
 const getRoom = (code) => {
   if (!rooms.has(code)) {
-    rooms.set(code, { code, state: createRoomState(code), clients: new Set() })
+    rooms.set(code, { code, game: createRoomGame(code), clients: new Set() })
   }
   return rooms.get(code)
 }
 
 const broadcastSnapshot = (room) => {
+  const state = room.game.state
   // Calculate hand counts globally first
-  const handCounts = room.state.players.reduce((acc, p) => {
-    const count = room.state.board.filter((c) => c.zone === 'hand' && c.owner === p.name).length
+  const handCounts = state.players.reduce((acc, p) => {
+    const count = state.board.filter((c) => c.zone === 'hand' && c.owner === p.name).length
     acc[p.id] = count
     return acc
   }, {})
@@ -85,12 +91,12 @@ const broadcastSnapshot = (room) => {
     if (client.readyState !== client.OPEN) return
 
     // Clone state to avoid mutating the source of truth
-    const snapshot = { ...room.state }
+    const snapshot = { ...state }
     
     // 1. Filter Board: Remove cards in hand that don't belong to the viewer
     // If client has no playerId (spectator), they see NO hands (or maybe all? let's say none for privacy)
     const viewerId = client.playerId
-    const viewerName = room.state.players.find((p) => p.id === viewerId)?.name
+    const viewerName = state.players.find((p) => p.id === viewerId)?.name
 
     snapshot.board = snapshot.board.filter((card) => {
       if (card.zone !== 'hand') return true
@@ -124,11 +130,13 @@ const broadcastSnapshot = (room) => {
 }
 
 const addLog = (room, label, detail) => {
-  room.state.log = [{ label, detail, timestamp: now() }, ...room.state.log].slice(0, 50)
+  // We can use the game's log directly or dispatch an effect.
+  // For now, direct mutation to match existing pattern, but ideally we use effects.
+  room.game.state.log = [{ label, detail, timestamp: now() }, ...room.game.state.log].slice(0, 50)
 }
 
 const updatePending = (room, taskId) => {
-  room.state.pending = room.state.pending.map((task) =>
+  room.game.state.pending = room.game.state.pending.map((task) =>
     task.id === taskId ? { ...task, done: !task.done } : task,
   )
 }
@@ -414,15 +422,15 @@ server.on('connection', (socket) => {
 
         // Update player name if assigned
         if (socket.playerId) {
-          const oldName = currentRoom.state.players.find(p => p.id === socket.playerId)?.name
+          const oldName = currentRoom.game.state.players.find(p => p.id === socket.playerId)?.name
           
-          currentRoom.state.players = currentRoom.state.players.map(p => 
+          currentRoom.game.state.players = currentRoom.game.state.players.map(p => 
             p.id === socket.playerId ? { ...p, name: name } : p
           )
 
           // Update card ownership if name changed
           if (oldName && oldName !== name) {
-            currentRoom.state.board = currentRoom.state.board.map(card => 
+            currentRoom.game.state.board = currentRoom.game.state.board.map(card => 
               card.owner === oldName ? { ...card, owner: name } : card
             )
           }
@@ -435,7 +443,7 @@ server.on('connection', (socket) => {
       case 'create_room': {
         const code = makeSeed()
         const room = getRoom(code)
-        room.state = createRoomState(code)
+        // room.game is already created by getRoom
         room.clients.add(socket)
         
         // Creator is always p1
@@ -465,7 +473,7 @@ server.on('connection', (socket) => {
             const commanders = Object.values(result.deck.commanders || {}).map((entry) => entry.card?.name).filter(Boolean)
             
             // Update player metadata
-            currentRoom.state.players = currentRoom.state.players.map((p) => 
+            currentRoom.game.state.players = currentRoom.game.state.players.map((p) => 
               p.id === playerId ? {
                 ...p,
                 deck: result.deck.name || p.deck,
@@ -473,14 +481,14 @@ server.on('connection', (socket) => {
               } : p
             )
 
-            const player = currentRoom.state.players.find(p => p.id === playerId)
+            const player = currentRoom.game.state.players.find(p => p.id === playerId)
 
             // Remove existing cards owned by this player
-            currentRoom.state.board = currentRoom.state.board.filter(c => c.owner !== player.name)
+            currentRoom.game.state.board = currentRoom.game.state.board.filter(c => c.owner !== player.name)
 
             // Build new cards ONLY for this player
             const newCards = buildBoardFromDeck(result.deck, [player])
-            currentRoom.state.board.push(...newCards)
+            currentRoom.game.state.board.push(...newCards)
 
             addLog(
               currentRoom,
@@ -509,7 +517,7 @@ server.on('connection', (socket) => {
       }
       case 'update_status': {
         if (!currentRoom) return
-        currentRoom.state.players = currentRoom.state.players.map((p) =>
+        currentRoom.game.state.players = currentRoom.game.state.players.map((p) =>
           p.id === data.playerId ? { ...p, status: data.status } : p,
         )
         addLog(currentRoom, 'Status', `${name} set ${data.playerId} to ${data.status}`)
@@ -526,6 +534,35 @@ server.on('connection', (socket) => {
       case 'spectate': {
         if (!currentRoom) return
         addLog(currentRoom, 'Spectate', `${name} entered spectate-only mode`)
+        broadcastSnapshot(currentRoom)
+        break
+      }
+      case 'game_action': {
+        if (!currentRoom) return
+        if (!socket.playerId) {
+            safeSend({ type: 'error', message: 'Spectators cannot perform actions' })
+            break
+        }
+
+        try {
+            currentRoom.game.dispatch({
+                ...data.action,
+                playerId: socket.playerId,
+            })
+            broadcastSnapshot(currentRoom)
+        } catch (err) {
+            safeSend({ type: 'error', message: err.message })
+        }
+        break
+      }
+      case 'undo': {
+        if (!currentRoom) return
+        if (!socket.playerId) {
+            safeSend({ type: 'error', message: 'Spectators cannot undo' })
+            break
+        }
+        currentRoom.game.undo()
+        addLog(currentRoom, 'Undo', `${name} undid the last action`)
         broadcastSnapshot(currentRoom)
         break
       }
@@ -547,8 +584,9 @@ server.on('connection', (socket) => {
             .insert({
               room_code: currentRoom.code,
               winner,
-              log: currentRoom.state.log,
-              final_state: currentRoom.state
+              log: currentRoom.game.state.log,
+              final_state: currentRoom.game.state,
+              history: currentRoom.game.state.history // Save the full history!
             })
           
           if (error) {
