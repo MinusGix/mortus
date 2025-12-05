@@ -1,7 +1,7 @@
 import './App.css'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { BrowserRouter, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import { type BoardCard } from './types'
+import { type BoardCard, ActionTypes } from './types'
 import { summarizeDeck, type MoxfieldDeckSummary } from './moxfield'
 import { createWsClient, type ClientState } from './wsClient'
 
@@ -32,11 +32,16 @@ const saveRecentDecks = (decks: string[]) => {
   }
 }
 
-function CardList({ cards, compact = false }: { cards: BoardCard[]; compact?: boolean }) {
+function CardList({ cards, compact = false, onCardClick, onCardContextMenu }: { cards: BoardCard[]; compact?: boolean; onCardClick?: (c: BoardCard) => void; onCardContextMenu?: (e: React.MouseEvent, c: BoardCard) => void }) {
   return (
     <div className="cards">
       {cards.map((card) => (
-        <div key={card.id} className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}>
+        <div
+          key={card.id}
+          className={`card ${compact ? 'card-compact' : ''} ${card.tapped ? 'tapped' : ''}`}
+          onClick={() => onCardClick?.(card)}
+          onContextMenu={(e) => onCardContextMenu?.(e, card)}
+        >
           {card.image || card.backImage ? (
             <>
               <img className="card__image" src={card.image || defaultCardBack} alt={card.name} />
@@ -65,6 +70,8 @@ function ZonePile({
   count?: number
   topCard?: BoardCard
   variant?: 'deck' | 'yard' | 'exile' | 'commander'
+  onDraw?: () => void
+  onShuffle?: () => void
 }) {
   const topImage = topCard?.image || (topCard?.backImage ? defaultCardBack : null) || (variant === 'deck' && count ? defaultCardBack : null)
   return (
@@ -73,20 +80,26 @@ function ZonePile({
         <div className="layer layer-1" />
         <div className="layer layer-2" />
         <div className="layer layer-3" />
-          {topImage ? (
-            <>
-              <img className="pile-bg-image" src={topImage} alt={topCard?.name || label} />
-              <div className="pile-vignette" />
-            </>
+        {topImage ? (
+          <>
+            <img className="pile-bg-image" src={topImage} alt={topCard?.name || label} />
+            <div className="pile-vignette" />
+          </>
+        ) : null}
+        <div className="pile-content">
+          <span className="pile-label">{label}</span>
+          {topCard && !topImage ? <span className="pile-card">{topCard.name}</span> : null}
+          {topCard && topImage && variant !== 'deck' ? (
+            <span className="pile-card-name-overlay">{topCard.name}</span>
           ) : null}
-          <div className="pile-content">
-            <span className="pile-label">{label}</span>
-            {topCard && !topImage ? <span className="pile-card">{topCard.name}</span> : null}
-            {topCard && topImage && variant !== 'deck' ? (
-              <span className="pile-card-name-overlay">{topCard.name}</span>
-            ) : null}
-            {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
+          {typeof count === 'number' ? <span className="pile-count">{count}</span> : null}
+        </div>
+        {variant === 'deck' && onDraw && onShuffle ? (
+          <div className="pile-actions">
+            <button onClick={onDraw} title="Draw Card">Draw</button>
+            <button onClick={onShuffle} title="Shuffle">Shuffle</button>
           </div>
+        ) : null}
       </div>
     </div>
   )
@@ -290,7 +303,9 @@ function Board({
   const [deckLoading, setDeckLoading] = useState(false)
   const [deckError, setDeckError] = useState<string | null>(null)
   const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
+  const [deckSummary, setDeckSummary] = useState<MoxfieldDeckSummary | null>(null)
   const [handStyle, setHandStyle] = useState<'fan' | 'flat'>('fan')
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; card: BoardCard } | null>(null)
   const clientState = useClientState()
   const snapshot = clientState.snapshot
   const opponents = snapshot?.players.slice(1) ?? []
@@ -405,8 +420,81 @@ function Board({
     }
   }
 
+  const onDraw = () => {
+    client.gameAction({
+      type: ActionTypes.DRAW_CARD,
+      payload: { playerId: hero.id, amount: 1 }
+    })
+  }
+
+  const onShuffle = () => {
+    client.gameAction({
+      type: ActionTypes.SHUFFLE_LIBRARY,
+      payload: { playerId: hero.id }
+    })
+  }
+
+  const onModifyLife = (amount: number) => {
+    client.gameAction({
+      type: ActionTypes.MODIFY_LIFE,
+      payload: { playerId: hero.id, amount }
+    })
+  }
+
+  const onUndo = () => {
+    client.undo()
+  }
+
+  const onUndo = () => {
+    client.undo()
+  }
+
+  const handleCardClick = (card: BoardCard) => {
+    if (card.zone === 'battlefield') {
+      client.gameAction({
+        type: card.tapped ? ActionTypes.UNTAP_CARD : ActionTypes.TAP_CARD,
+        payload: { cardId: card.id, playerId: hero.id }
+      })
+    }
+  }
+
+  const handleCardContextMenu = (e: React.MouseEvent, card: BoardCard) => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY, card })
+  }
+
+  const closeContextMenu = () => setContextMenu(null)
+
+  const moveCard = (cardId: string, toZone: string) => {
+    client.gameAction({
+      type: ActionTypes.MOVE_CARD,
+      payload: { cardId, toZone, playerId: hero.id }
+    })
+    closeContextMenu()
+  }
+
+  useEffect(() => {
+    const handleClick = () => closeContextMenu()
+    window.addEventListener('click', handleClick)
+    return () => window.removeEventListener('click', handleClick)
+  }, [])
+
   return (
     <div className={`app theme-${theme}`}>
+      {contextMenu ? (
+        <div
+          className="context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="menu-header">{contextMenu.card.name}</div>
+          <button onClick={() => moveCard(contextMenu.card.id, 'hand')}>To Hand</button>
+          <button onClick={() => moveCard(contextMenu.card.id, 'battlefield')}>To Battlefield</button>
+          <button onClick={() => moveCard(contextMenu.card.id, 'graveyard')}>To Graveyard</button>
+          <button onClick={() => moveCard(contextMenu.card.id, 'exile')}>To Exile</button>
+          <button onClick={() => moveCard(contextMenu.card.id, 'library')}>To Library (Top)</button>
+        </div>
+      ) : null}
       <div className="board-shell">
         <main className="content">
           <section className="panel playmat">
@@ -486,8 +574,10 @@ function Board({
 
               <div className="seat hero">
                 <div className="seat__life" style={{ borderColor: hero.color }}>
+                  <button className="life-btn" onClick={() => onModifyLife(1)}>+</button>
                   {hero.life}
                   <span>life</span>
+                  <button className="life-btn" onClick={() => onModifyLife(-1)}>-</button>
                 </div>
                 <div className="seat__header">
                   <p className="player__meta">
@@ -499,13 +589,20 @@ function Board({
                 </div>
                 <div className="seat__zones">
                   <div className="pile-column">
-                    <ZonePile label="Library" count={heroLibrary.length} topCard={heroLibraryTop || undefined} variant="deck" />
+                    <ZonePile
+                      label="Library"
+                      count={heroLibrary.length}
+                      topCard={heroLibraryTop || undefined}
+                      variant="deck"
+                      onDraw={onDraw}
+                      onShuffle={onShuffle}
+                    />
                     <CommanderZone label="Commander" cards={heroCommanders} />
                     <ZonePile label="Exile" topCard={heroExileTop} variant="exile" />
                     <ZonePile label="Graveyard" topCard={heroYardTop} variant="yard" />
                   </div>
                   <div className="battlefield">
-                    <CardList cards={heroBattlefield} />
+                    <CardList cards={heroBattlefield} onCardClick={handleCardClick} onCardContextMenu={handleCardContextMenu} />
                   </div>
                 </div>
               </div>
@@ -516,7 +613,7 @@ function Board({
                 {heroHand.map((card, idx) => {
                   const total = heroHand.length
                   const center = (total - 1) / 2
-                  
+
                   let rotate = 0
                   let translateX = 0
                   let translateY = 0
@@ -525,7 +622,7 @@ function Board({
                     // Dynamic spread: tighter for few cards, wider for many, capped at max width
                     const maxTotalAngle = 140
                     const spreadAngle = Math.min(10, maxTotalAngle / Math.max(1, total - 1))
-                    
+
                     rotate = (idx - center) * spreadAngle
                     translateX = (idx - center) * 35 // spread out horizontally
                     translateY = Math.abs(idx - center) * 12 // stronger arch for larger cards
@@ -535,7 +632,7 @@ function Board({
                     translateX = (idx - center) * 140 // 220px width - 80px overlap
                     translateY = 0
                   }
-                  
+
                   return (
                     <div
                       key={card.id}
@@ -547,6 +644,8 @@ function Board({
                         '--y': `${translateY}px`,
                         zIndex: idx,
                       }}
+                      onClick={() => handleCardClick(card)}
+                      onContextMenu={(e) => handleCardContextMenu(e, card)}
                     >
                       {card.image || card.backImage ? (
                         <>
@@ -580,11 +679,11 @@ function Board({
               <p className="muted small">Seed {snapshot.seed}</p>
             </div>
 
-              <div className="side-drawer__section">
-                <div className="side-drawer__section-header">
-                  <p className="eyebrow">Settings</p>
-                </div>
-                <div className="chips">
+            <div className="side-drawer__section">
+              <div className="side-drawer__section-header">
+                <p className="eyebrow">Settings</p>
+              </div>
+              <div className="chips">
                 <span className="chip">Stub cards</span>
                 <span className="chip">Commander ready</span>
               </div>
@@ -698,14 +797,14 @@ function Board({
               {sidebarOpen ? 'chevron_right' : 'chevron_left'}
             </span>
           </button>
-          <button className="rail-btn draw" type="button" aria-label="Draw card" data-tooltip="Draw card">
+          <button className="rail-btn draw" type="button" aria-label="Draw card" data-tooltip="Draw card" onClick={onDraw}>
             <span className="material-symbols-rounded rail-icon">auto_stories</span>
           </button>
-          <button className="rail-btn" type="button" aria-label="Shuffle" data-tooltip="Shuffle">
+          <button className="rail-btn" type="button" aria-label="Shuffle" data-tooltip="Shuffle" onClick={onShuffle}>
             <span className="material-symbols-rounded rail-icon">shuffle</span>
           </button>
-          <button className="rail-btn mulligan" type="button" aria-label="Mulligan" data-tooltip="Mulligan">
-            <span className="material-symbols-rounded rail-icon">restart_alt</span>
+          <button className="rail-btn mulligan" type="button" aria-label="Undo" data-tooltip="Undo" onClick={onUndo}>
+            <span className="material-symbols-rounded rail-icon">undo</span>
           </button>
         </div>
       </div>

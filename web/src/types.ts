@@ -50,3 +50,14 @@ export type GameSnapshot = {
   log: LogEntry[]
   pending: PendingTask[]
 }
+
+export const ActionTypes = {
+  PLAY_LAND: 'PLAY_LAND',
+  CAST_SPELL: 'CAST_SPELL',
+  DRAW_CARD: 'DRAW_CARD',
+  PASS_PRIORITY: 'PASS_PRIORITY',
+  MOVE_CARD: 'MOVE_CARD',
+  SHUFFLE_LIBRARY: 'SHUFFLE_LIBRARY',
+  MODIFY_LIFE: 'MODIFY_LIFE',
+  SET_MODE: 'SET_MODE',
+}

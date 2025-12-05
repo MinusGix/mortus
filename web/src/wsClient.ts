@@ -135,6 +135,12 @@ export const createWsClient = (url: string) => {
     async simulateAction(label: string, detail: string) {
       await send({ type: 'simulate_action', label, detail })
     },
+    async gameAction(action: { type: string; payload?: unknown }) {
+      await send({ type: 'game_action', action })
+    },
+    async undo() {
+      await send({ type: 'undo' })
+    },
     async fetchMoxfield(url: string) {
       const id = `mox-${++requestId}-${Date.now()}`
       await send({ type: 'fetch_moxfield', url, requestId: id })

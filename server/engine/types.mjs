@@ -26,7 +26,10 @@ export const ActionTypes = {
   CAST_SPELL: 'CAST_SPELL',
   DRAW_CARD: 'DRAW_CARD',
   PASS_PRIORITY: 'PASS_PRIORITY',
-  // ... add more as needed
+  MOVE_CARD: 'MOVE_CARD',
+  SHUFFLE_LIBRARY: 'SHUFFLE_LIBRARY',
+  MODIFY_LIFE: 'MODIFY_LIFE',
+  SET_MODE: 'SET_MODE',
 }
 
 export const EffectTypes = {
@@ -35,4 +38,6 @@ export const EffectTypes = {
   UNTAP_CARD: 'UNTAP_CARD',
   MODIFY_LIFE: 'MODIFY_LIFE',
   ADD_LOG: 'ADD_LOG',
+  SHUFFLE_ZONE: 'SHUFFLE_ZONE',
+  SET_ZONE_ORDER: 'SET_ZONE_ORDER',
 }

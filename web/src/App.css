@@ -1045,3 +1045,73 @@ button.ghost {
     margin-left: 1rem;
   }
 }
+
+/* Context Menu */
+.context-menu {
+  position: fixed;
+  background: var(--surface-strong);
+  border: 1px solid var(--stroke-strong);
+  border-radius: 12px;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  z-index: 1000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+  animation: fadeIn 0.1s ease;
+}
+
+.context-menu .menu-header {
+  padding: 0.5rem 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--stroke);
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.context-menu button {
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.context-menu button:hover {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.pile-actions {
+  position: absolute;
+  bottom: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.zone-pile:hover .pile-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pile-actions button {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
